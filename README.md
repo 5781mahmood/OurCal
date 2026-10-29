@@ -1,64 +1,90 @@
 # OurCal
 
-Local-first calorie and macro diary built as a modern web app (React + TypeScript). Set a daily goal from your body stats, log meals from a searchable food catalog or custom entries, and review streaks, weekly charts, and macro splits — all stored in your browser.
+Calorie and macro diary for the web. Local-first in the browser, with optional Supabase sync for global usernames, shared custom foods, friendships, diary rows, and realtime chat.
 
-**Role:** Solo personal project (evolved from an earlier Tkinter prototype).
+**Live:** [https://ourcal-pi.vercel.app](https://ourcal-pi.vercel.app)  
+**Repo:** [https://github.com/5781mahmood/OurCal](https://github.com/5781mahmood/OurCal)
 
-## Tools
+## Stack
 
-- **React 19 + TypeScript** — typed UI and state
-- **Vite** — fast dev server and production builds
-- **Recharts** — weekly calorie bars and macro pie chart
-- **date-fns** — day navigation and date keys
-- **localStorage** — persistence without a backend
-- **Mifflin–St Jeor** — BMR/TDEE estimate for calorie goals
+- **React 19 + TypeScript + Vite** — SPA UI and typed domain models
+- **React Router** — marketing site (`/`), app (`/app`), custom 404
+- **Supabase (Postgres)** — optional cloud for profiles, foods, friends, chat, diary
+- **localStorage** — offline diary that still works without cloud keys
+- **Recharts** — weekly bars and macro pie (lazy-loaded)
+- **qrcode.react + html5-qrcode** — invite QR generate and scan (lazy-loaded People tab)
+- **Vercel** — GitHub `main` auto-deploys; `vercel.json` SPA rewrites
+- **Vitest** — unit tests for nutrition, balance, macros, streak, badges
 
 ## Features
 
-- Onboarding with sex, age, height, weight, activity, and lose/maintain/gain goal
-- Suggested calorie target + protein/carbs/fat goals (editable via profile)
-- Daily diary by Breakfast / Lunch / Dinner / Snack
-- Searchable built-in food list + save custom foods
-- Progress ring, remaining calories, and macro bars
-- Stats: logging streak, 14-day average (from *your* logs only), 7-day chart, meal breakdown
-- Export / import JSON backup; reset all data
+- Onboarding with Mifflin–St Jeor TDEE, macros, global username, profile photo
+- Daily diary (Breakfast / Lunch / Dinner / Snack) + 270+ food catalog + custom foods
+- **Balance index** (0–100) from calorie + macro adherence
+- Macro traffic lights (red / orange / green vs goal)
+- Streak week with today marker and fill animations
+- Badges for streaks, first log, balance 80+, friends, shared foods
+- Friends via username, invite link (`?u=`), or QR
+- DM / group chat with Supabase Realtime when cloud is configured
+- Export / import JSON backup
 
-## How to run
+## Run locally
 
 ```bash
-cd OurCal
 npm install
 npm run dev
 ```
 
-Open the URL Vite prints (usually `http://localhost:5173`).
-
-Production build:
-
 ```bash
 npm run build
-npm run preview
+npm test
+npm run lint
+```
+
+## Supabase setup (cloud features)
+
+1. Create a free project at [supabase.com](https://supabase.com).
+2. In **SQL Editor**, run [`supabase/schema.sql`](supabase/schema.sql), then [`supabase/social.sql`](supabase/social.sql).
+3. Copy **Project URL** and **anon public** key (not `service_role`).
+4. In Vercel → Project → Environment Variables, add as **Config** (plain), not Secret:
+   - `VITE_SUPABASE_URL` = `https://YOUR_PROJECT.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY` = long `eyJ…` string
+5. Redeploy. Vite only reads these at **build** time.
+
+Without keys, the app stays fully usable on one device. Placeholders like `0` / `1` are ignored.
+
+**Demo security note:** RLS policies are open for class/demo multi-user use. Production hardening would add Supabase Auth and per-user policies.
+
+## Deploy
+
+Push to `main` on GitHub. Vercel rebuilds automatically.
+
+```bash
+git add -A
+git commit -m "Describe your change"
+git push origin main
 ```
 
 ## Project map
 
 | Path | Purpose |
 |------|---------|
-| `src/types.ts` | Shared TypeScript models |
-| `src/lib/nutrition.ts` | Mifflin–St Jeor, TDEE, macro defaults |
-| `src/lib/storage.ts` | load/save/export/import |
-| `src/data/foods.ts` | Offline food catalog |
-| `src/hooks/useTracker.ts` | App state + diary actions |
-| `src/components/*` | Onboarding, Today, Stats, Profile, modal, ring |
-| `src/App.tsx` | Shell + navigation |
+| `src/types.ts` | Domain models |
+| `src/lib/nutrition.ts` | BMR / TDEE / macros |
+| `src/lib/balanceIndex.ts` | Balance score |
+| `src/lib/streak.ts` | Logging streak |
+| `src/lib/badges.ts` | Achievements |
+| `src/lib/cloud.ts` | Supabase client + sync |
+| `src/lib/storage.ts` | localStorage + export/import |
+| `src/hooks/useTracker.ts` | App state |
+| `src/components/*` | Today, Stats, People, Profile, streak UI |
+| `src/pages/*` | Landing + 404 |
+| `supabase/*.sql` | Postgres tables + RLS + realtime |
 
-## What I learned
+## What this project demonstrates
 
-- Splitting a tracker into **domain logic** (nutrition math, storage) vs **UI** keeps the app maintainable
-- **Local-first** design (JSON in `localStorage`) means a recruiter can demo it with zero setup
-- Typed diary entries + meal grouping make stats charts honest — averages only use days that actually have logs
-- Replacing a desktop Tkinter GUI with a responsive React app teaches the stack used in most product teams
-
-## Note on estimates
-
-Calorie goals use the Mifflin–St Jeor equation and standard activity multipliers. Food catalog values are typical per-serving estimates for offline use — not a medical device and not pulled from a live nutrition API.
+- Domain logic separated from UI
+- Local-first design with optional cloud catch-up sync
+- SPA routing, SEO meta, Vercel SPA rewrites
+- Realtime chat via Supabase publications
+- Editorial UI without template “AI slop” patterns

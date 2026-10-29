@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { SiteFooter, SiteHeader } from '../components/SiteChrome'
+import { DemoStreakWeek } from '../components/StreakWeek'
 
 export function LandingPage() {
   return (
@@ -42,20 +43,27 @@ export function LandingPage() {
                 <span>Thursday</span>
                 <strong>1,842 / 2,200</strong>
               </header>
-              <ol className="sheet-streak">
-                <li className="on">M</li>
-                <li className="on">T</li>
-                <li className="on">W</li>
-                <li className="on">T</li>
-                <li>F</li>
-                <li>S</li>
-                <li>S</li>
-              </ol>
+              <DemoStreakWeek />
               <p className="sheet-score">Balance index 86</p>
-              <ul>
-                <li><span>Protein 128g</span><i className="macro-high" /></li>
-                <li><span>Carbs 164g</span><i className="macro-mid" /></li>
-                <li><span>Fat 48g</span><i className="macro-low" /></li>
+              <ul className="sheet-macros">
+                <li>
+                  <span>Protein 128g</span>
+                  <span className="sheet-bar-track">
+                    <i className="macro-high sheet-bar" style={{ width: '85%' }} />
+                  </span>
+                </li>
+                <li>
+                  <span>Carbs 164g</span>
+                  <span className="sheet-bar-track">
+                    <i className="macro-mid sheet-bar" style={{ width: '60%' }} />
+                  </span>
+                </li>
+                <li>
+                  <span>Fat 48g</span>
+                  <span className="sheet-bar-track">
+                    <i className="macro-low sheet-bar" style={{ width: '35%' }} />
+                  </span>
+                </li>
               </ul>
             </div>
             <figcaption>Today view with macro traffic lights and streak week.</figcaption>
@@ -66,16 +74,20 @@ export function LandingPage() {
           <div className="editorial-copy">
             <h2>Balance index</h2>
             <p>
-              Cal AI focuses on photos. OurCal focuses on accountability math. Your
-              balance index scores how close you are to calorie and macro targets in
-              one number you can share with friends in chat.
+              Photo apps guess your plate. OurCal scores how close you are to calorie
+              and macro targets in one number you can share in a private thread.
             </p>
           </div>
           <figure className="editorial-figure">
-            <div className="product-sheet" aria-hidden>
-              <p className="sheet-score">86</p>
-              <p>Calories within 8% of goal. Protein above target. Fat still low.</p>
-              <ul>
+            <div className="product-sheet balance-sheet" aria-hidden>
+              <p className="sheet-score sheet-score-xl">86</p>
+              <div className="sheet-meter" role="presentation">
+                <span style={{ width: '86%' }} />
+              </div>
+              <p className="sheet-detail">
+                Calories within 8% of goal. Protein above target. Fat still low.
+              </p>
+              <ul className="sheet-points">
                 <li>Share this score in a private thread.</li>
                 <li>Badges unlock at 3, 7, 14, and 30 days.</li>
               </ul>
@@ -94,15 +106,15 @@ export function LandingPage() {
             </p>
           </div>
           <figure className="editorial-figure">
-            <div className="product-sheet" aria-hidden>
+            <div className="product-sheet chat-sheet" aria-hidden>
               <header>
                 <span>@alex</span>
                 <strong>Thread</strong>
               </header>
-              <ul>
-                <li>Logged lunch. Balance index 86.</li>
-                <li>On a 4-day streak.</li>
-                <li>Invite with QR or @username.</li>
+              <ul className="sheet-chat">
+                <li className="bubble">Logged lunch. Balance index 86.</li>
+                <li className="bubble mine">On a 4-day streak.</li>
+                <li className="bubble">Invite with QR or @username.</li>
               </ul>
             </div>
             <figcaption>Private threads instead of public group feeds.</figcaption>

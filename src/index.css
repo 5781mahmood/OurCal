@@ -318,30 +318,8 @@ p {
   font-size: 1.35rem;
 }
 
-.sheet-streak {
-  list-style: none;
-  display: flex;
-  gap: 0.35rem;
+.product-sheet .streak-week {
   margin: 1rem 0;
-  padding: 0;
-}
-
-.sheet-streak li {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.sheet-streak li.on {
-  background: var(--accent);
-  color: var(--paper);
-  border-color: var(--accent);
 }
 
 .sheet-score {
@@ -351,29 +329,121 @@ p {
   margin-bottom: 0.75rem;
 }
 
-.product-sheet ul {
+.sheet-macros {
   list-style: none;
   margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.sheet-macros li {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 0.65rem;
+  align-items: center;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+.sheet-bar-track {
+  display: block;
+  height: 8px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.sheet-bar {
+  display: block;
+  height: 100%;
+  transform-origin: left center;
+  animation: bar-grow 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sheet-macros li:nth-child(2) .sheet-bar {
+  animation-delay: 0.08s;
+}
+
+.sheet-macros li:nth-child(3) .sheet-bar {
+  animation-delay: 0.16s;
+}
+
+.sheet-score-xl {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.sheet-meter {
+  height: 8px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 0.75rem 0 1rem;
+}
+
+.sheet-meter span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left center;
+  animation: bar-grow 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sheet-detail {
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.sheet-points {
+  list-style: none;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+
+.sheet-points li {
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--line);
+}
+
+.sheet-chat {
+  list-style: none;
+  margin: 0.85rem 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
 }
 
-.product-sheet li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  padding-top: 0.45rem;
-  border-top: 1px solid var(--line);
-  font-size: 0.9rem;
+.sheet-chat .bubble {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  font-size: 0.88rem;
+  animation: rise 0.4s ease both;
 }
 
-.product-sheet i {
-  width: 72px;
-  height: 8px;
-  display: block;
+.sheet-chat .bubble:nth-child(2) {
+  animation-delay: 0.08s;
+}
+
+.sheet-chat .bubble:nth-child(3) {
+  animation-delay: 0.16s;
+}
+
+.sheet-chat .bubble.mine {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  align-self: flex-end;
+  max-width: 90%;
 }
 
 .diary-preview {
@@ -517,6 +587,11 @@ p {
 
 .streak-flame {
   color: var(--macro-mid);
+  transform-origin: center bottom;
+}
+
+.streak-flame svg {
+  display: block;
   animation: flame-pulse 2.4s ease-in-out infinite;
 }
 
@@ -553,31 +628,70 @@ p {
   margin: 0;
   padding: 0;
   display: flex;
-  gap: 0.35rem;
+  gap: 0.4rem;
+  align-items: center;
 }
 
-.streak-week li {
-  width: 28px;
-  height: 36px;
+.streak-day {
+  width: 32px;
+  height: 32px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  display: grid;
-  place-items: center;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
   background: var(--paper);
+  color: var(--muted);
+  flex-shrink: 0;
 }
 
-.streak-week li.on {
+.streak-day-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  font-family: var(--font-body);
+  text-align: center;
+}
+
+.streak-day.on {
   background: var(--accent);
   border-color: var(--accent);
-  color: #f5f5f7;
+  color: var(--paper);
+}
+
+.streak-day.is-today:not(.on) {
+  border-color: var(--ink);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.streak-day.is-today.on {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.streak-week.is-animated .streak-day.on {
+  animation: day-fill 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--day-i, 0) * 55ms);
+}
+
+.streak-day.just-logged {
+  animation: day-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--day-i, 0) * 55ms + 0.12s);
+}
+
+.streak-count {
+  display: inline-block;
+  animation: count-pop 0.4s ease both;
 }
 
 .balance-strip {
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
+  margin-bottom: 1.15rem;
+  padding: 0.85rem 0 0.9rem;
+  border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
 
@@ -748,7 +862,7 @@ select:focus {
 
 .ring-value {
   stroke: var(--ring-color, var(--accent));
-  transition: stroke-dashoffset 0.5s ease;
+  transition: stroke-dashoffset 0.65s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .ring-center {
@@ -800,7 +914,7 @@ select:focus {
 .bar-fill,
 .mini-fill {
   height: 100%;
-  transition: width 0.4s ease;
+  transition: width 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .macro-low {
@@ -841,11 +955,20 @@ select:focus {
   margin-bottom: 0.65rem;
 }
 
-.meal-block header p,
+.meal-block header p {
+  color: var(--muted);
+  font-size: 0.88rem;
+  margin-top: 0.15rem;
+}
+
 .empty-meal {
   color: var(--muted);
   font-size: 0.88rem;
   margin-top: 0.15rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 0.75rem 0.85rem;
+  background: var(--paper);
 }
 
 .entry-list {
@@ -1298,6 +1421,8 @@ select:focus {
   font-weight: 600;
   border: 1px solid var(--line);
   background: var(--surface);
+  animation: toast-in 0.28s ease both;
+  margin-top: 0.4rem;
 }
 
 .toast.success {
@@ -1315,6 +1440,10 @@ select:focus {
 
 .view-enter {
   animation: rise 0.3s ease both;
+}
+
+.view-fallback {
+  padding: 2rem 0;
 }
 
 @keyframes rise {
@@ -1343,7 +1472,61 @@ select:focus {
     transform: scale(1);
   }
   50% {
-    transform: scale(1.04);
+    transform: scale(1.06);
+  }
+}
+
+@keyframes day-fill {
+  from {
+    opacity: 0.35;
+    transform: scale(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes day-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.14);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes count-pop {
+  from {
+    opacity: 0.4;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -1431,6 +1614,12 @@ select:focus {
   .streak-week {
     grid-column: 1 / -1;
     justify-content: space-between;
+    width: 100%;
+  }
+
+  .streak-day {
+    width: 34px;
+    height: 34px;
   }
 
   .servings-row {

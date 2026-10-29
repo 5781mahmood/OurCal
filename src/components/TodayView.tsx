@@ -6,6 +6,7 @@ import { macroLevel, macroLevelClass } from '../lib/macroLevel'
 import { ProgressRing } from './ProgressRing'
 import { AddFoodModal } from './AddFoodModal'
 import { StreakBanner } from './StreakBanner'
+import { BalanceMeter } from './BalanceMeter'
 import type { TrackerApi } from '../hooks/useTracker'
 
 const MEALS: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
@@ -101,7 +102,7 @@ export function TodayView({ tracker, profile }: TodayViewProps) {
 
       <div className="balance-strip">
         <p className="balance-label">Balance index</p>
-        <p className="balance-value">{score}</p>
+        <BalanceMeter value={score} />
         <p className="meta">Single score from calories and macro targets today.</p>
       </div>
 
