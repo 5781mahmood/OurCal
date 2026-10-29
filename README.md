@@ -39,7 +39,55 @@ npm run dev
 npm run build
 npm test
 npm run lint
+npm run test:e2e
 ```
+
+First time only (downloads Chromium for Playwright):
+
+```bash
+npx playwright install chromium
+```
+
+## Testing
+
+**Unit (Vitest)** — pure domain logic with no browser: nutrition / TDEE, balance index, macro levels, streak, badges. Fast feedback while editing formulas.
+
+**End-to-end (Playwright)** — drives a real Chromium against the Vite app (`playwright.config.ts` starts `npm run dev` for you). Specs live in `e2e/`:
+
+| Area | What we assert |
+|------|----------------|
+| Onboarding | Calorie goal appears; name required; Start tracking → Today; macro labels |
+| Diary | Log food updates ring; delete clears it; servings stepper; day nav + Jump to today; clear-day confirm/cancel; empty search; custom food |
+| Routing | Landing CTA; custom 404; invite `?u=` opens People |
+| People | QR + copy invite (`/app?u=`); no solo groups; self-add error; chat Send disabled until typed |
+| Stats / Profile | Empty week copy; chart after log; macro columns; Cancel edit; JSON export download |
+| Persistence | Reload keeps diary; export → wipe → import restores meals |
+| Macros / balance | Level words; protein bar after chicken; meal kcal header |
+| A11y smoke | Nav by role; Escape closes modal; ring `aria-label` |
+| Edge cases | Short username; bad friend input; Log food disabled until select; next day; reset |
+
+One-time browser download (also runs via `postinstall` after `npm install`):
+
+```bash
+npx playwright install chromium
+```
+
+Run commands **one at a time** (do not paste comments on the same line):
+
+```bash
+npm run test:e2e
+npm run test:e2e:headed
+npm run test:e2e:ui
+npm run test:e2e -- e2e/diary.spec.ts
+```
+
+| Script | What you see |
+|--------|----------------|
+| `test:e2e` | Headless Chromium (fast, CI-style) |
+| `test:e2e:headed` | Real browser windows so you can watch clicks |
+| `test:e2e:ui` | Playwright’s interactive UI mode |
+
+GitHub Actions (`.github/workflows/e2e.yml`) runs unit + Playwright on every push/PR to `main`.
 
 ## Supabase setup (cloud features)
 
