@@ -58,14 +58,13 @@ export async function registerUsername(
     }
 
     if (existing) {
-      await sb
-        .from('profiles')
-        .update({
-          display_name: displayName,
-          ...(avatar ? { avatar_url: avatar } : {}),
-        })
-        .eq('username', normalized)
-      return { ok: true, userId: existing.id as string }
+      // Never overwrite someone else's profile from another device/session.
+      return {
+        ok: false,
+        error: 'That username is already taken in the cloud. Using this device only.',
+        soft: true,
+        userId: existing.id as string,
+      }
     }
 
     const { data, error } = await sb
@@ -164,7 +163,8 @@ export async function updateCloudAvatar(
   const sb = getSupabase()
   if (!sb) return { ok: false, error: 'Cloud sync is not configured.' }
 
-  if (avatarUrl.startsWith('data:') && avatarUrl.length > 120_000) {
+  // Empty string clears the cloud avatar. Align size cap with registerUsername.
+  if (avatarUrl.startsWith('data:') && avatarUrl.length > 180_000) {
     return {
       ok: false,
       error: 'Photo is too large for the shared database. Use a smaller image.',
@@ -173,7 +173,7 @@ export async function updateCloudAvatar(
 
   const { error } = await sb
     .from('profiles')
-    .update({ avatar_url: avatarUrl })
+    .update({ avatar_url: avatarUrl || null })
     .eq('username', username)
 
   if (error) return { ok: false, error: error.message }
@@ -196,10 +196,13 @@ export async function fetchFriends(ownerUsername: string): Promise<FriendLink[]>
   }))
 }
 
-export async function saveFriendship(ownerUsername: string, friend: FriendLink): Promise<void> {
+export async function saveFriendship(
+  ownerUsername: string,
+  friend: FriendLink,
+): Promise<{ ok: boolean; error?: string }> {
   const sb = getSupabase()
-  if (!sb) return
-  await sb.from('friendships').upsert(
+  if (!sb) return { ok: false, error: 'Cloud sync is not configured.' }
+  const { error } = await sb.from('friendships').upsert(
     {
       owner_username: ownerUsername,
       friend_username: friend.username,
@@ -208,19 +211,23 @@ export async function saveFriendship(ownerUsername: string, friend: FriendLink):
     },
     { onConflict: 'owner_username,friend_username' },
   )
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
 }
 
 export async function deleteFriendship(
   ownerUsername: string,
   friendUsername: string,
-): Promise<void> {
+): Promise<{ ok: boolean; error?: string }> {
   const sb = getSupabase()
-  if (!sb) return
-  await sb
+  if (!sb) return { ok: false, error: 'Cloud sync is not configured.' }
+  const { error } = await sb
     .from('friendships')
     .delete()
     .eq('owner_username', ownerUsername)
     .eq('friend_username', friendUsername)
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
 }
 
 export async function fetchRooms(username: string): Promise<ChatRoom[]> {
@@ -257,6 +264,23 @@ export async function createCloudRoom(
     memberUsernames: data.member_usernames as string[],
     createdAt: data.created_at as string,
   }
+}
+
+/** Insert a local room so DMs created offline appear for other members. */
+export async function pushCloudRoom(room: ChatRoom): Promise<{ ok: boolean; error?: string }> {
+  const sb = getSupabase()
+  if (!sb) return { ok: false, error: 'Cloud sync is not configured.' }
+  const { error } = await sb.from('chat_rooms').insert({
+    id: room.id,
+    title: room.title,
+    member_usernames: room.memberUsernames,
+    created_at: room.createdAt,
+  })
+  // Ignore duplicate key — room already cloud-backed.
+  if (error && !/duplicate|unique/i.test(error.message)) {
+    return { ok: false, error: error.message }
+  }
+  return { ok: true }
 }
 
 export async function fetchMessages(roomId: string): Promise<ChatMessage[]> {
@@ -338,10 +362,13 @@ export function subscribeMessages(
   }
 }
 
-export async function pushDiaryEntry(username: string, entry: DiaryEntry): Promise<void> {
+export async function pushDiaryEntry(
+  username: string,
+  entry: DiaryEntry,
+): Promise<{ ok: boolean; error?: string }> {
   const sb = getSupabase()
-  if (!sb) return
-  await sb.from('diary_entries').upsert({
+  if (!sb) return { ok: false, error: 'Cloud sync is not configured.' }
+  const { error } = await sb.from('diary_entries').upsert({
     id: entry.id,
     username,
     entry_date: entry.date,
@@ -353,18 +380,31 @@ export async function pushDiaryEntry(username: string, entry: DiaryEntry): Promi
     carbs: entry.carbs,
     fat: entry.fat,
   })
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
 }
 
-export async function removeDiaryEntry(id: string): Promise<void> {
+export async function removeDiaryEntry(id: string): Promise<{ ok: boolean; error?: string }> {
   const sb = getSupabase()
-  if (!sb) return
-  await sb.from('diary_entries').delete().eq('id', id)
+  if (!sb) return { ok: false, error: 'Cloud sync is not configured.' }
+  const { error } = await sb.from('diary_entries').delete().eq('id', id)
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
 }
 
-export async function clearDiaryDay(username: string, date: string): Promise<void> {
+export async function clearDiaryDay(
+  username: string,
+  date: string,
+): Promise<{ ok: boolean; error?: string }> {
   const sb = getSupabase()
-  if (!sb) return
-  await sb.from('diary_entries').delete().eq('username', username).eq('entry_date', date)
+  if (!sb) return { ok: false, error: 'Cloud sync is not configured.' }
+  const { error } = await sb
+    .from('diary_entries')
+    .delete()
+    .eq('username', username)
+    .eq('entry_date', date)
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
 }
 
 export async function fetchDiary(username: string): Promise<DiaryEntry[]> {

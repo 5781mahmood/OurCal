@@ -23,6 +23,8 @@ const empty: AppState = {
   chatMessages: [],
   earnedBadges: [],
   cloudUserId: null,
+  deletedEntryIds: [],
+  deletedFriendUsernames: [],
 }
 
 describe('evaluateBadges', () => {

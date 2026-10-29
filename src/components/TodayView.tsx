@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { DiaryEntry, MealType, UserProfile } from '../types'
-import { formatDisplayDate, shiftDateKey } from '../lib/dates'
+import { formatDisplayDate, shiftDateKey, todayKey } from '../lib/dates'
 import { balanceIndex } from '../lib/balanceIndex'
-import { macroLevel, macroLevelClass } from '../lib/macroLevel'
+import { macroLevel, macroLevelClass, macroLevelLabel } from '../lib/macroLevel'
 import { ProgressRing } from './ProgressRing'
 import { AddFoodModal } from './AddFoodModal'
 import { StreakBanner } from './StreakBanner'
@@ -23,6 +23,7 @@ export function TodayView({ tracker, profile }: TodayViewProps) {
     dayEntries,
     dayTotals,
     addEntry,
+    updateEntry,
     deleteEntry,
     addCustomFood,
     clearDay,
@@ -34,6 +35,7 @@ export function TodayView({ tracker, profile }: TodayViewProps) {
   } = tracker
 
   const [modalMeal, setModalMeal] = useState<MealType | null>(null)
+  const isToday = selectedDate === todayKey()
 
   const byMeal = useMemo(() => {
     const map: Record<MealType, DiaryEntry[]> = {
@@ -73,6 +75,17 @@ export function TodayView({ tracker, profile }: TodayViewProps) {
     },
   ] as const
 
+  function requestClearDay() {
+    if (
+      !window.confirm(
+        'Clear all food logged for this day? This cannot be undone.',
+      )
+    ) {
+      return
+    }
+    clearDay()
+  }
+
   return (
     <div className="today view-enter">
       <StreakBanner streak={streak} streakWeek={streakWeek} />
@@ -86,9 +99,18 @@ export function TodayView({ tracker, profile }: TodayViewProps) {
         >
           ‹
         </button>
-        <div>
+        <div className="day-nav-center">
           <p className="eyebrow">Diary</p>
           <h1>{formatDisplayDate(selectedDate)}</h1>
+          {!isToday ? (
+            <button
+              type="button"
+              className="btn-ghost jump-today"
+              onClick={() => setSelectedDate(todayKey())}
+            >
+              Jump to today
+            </button>
+          ) : null}
         </div>
         <button
           type="button"
@@ -100,13 +122,12 @@ export function TodayView({ tracker, profile }: TodayViewProps) {
         </button>
       </header>
 
-      <div className="balance-strip">
-        <p className="balance-label">Balance index</p>
-        <BalanceMeter value={score} />
-        <p className="meta">Single score from calories and macro targets today.</p>
-      </div>
-
-      <section className="hero-day">
+      <section className="day-band">
+        <div className="day-band-meter">
+          <p className="balance-label">Balance index</p>
+          <BalanceMeter value={score} />
+          <p className="meta">Calories and macros vs your goals.</p>
+        </div>
         <ProgressRing
           value={dayTotals.calories}
           max={profile.calorieGoal}
@@ -119,12 +140,18 @@ export function TodayView({ tracker, profile }: TodayViewProps) {
         />
         <div className="macro-bars">
           {macros.map((m) => {
-            const pct = m.goal > 0 ? Math.min((m.value / m.goal) * 100, 100) : 0
+            const pct =
+              m.goal > 0 ? Math.min((m.value / m.goal) * 100, 100) : 0
             const level = macroLevel(m.value, m.goal)
             return (
               <div key={m.key} className="macro-bar">
                 <div className="macro-bar-head">
-                  <span>{m.label}</span>
+                  <span>
+                    {m.label}{' '}
+                    <em className={`macro-level-word ${macroLevelClass(level)}`}>
+                      {macroLevelLabel(level)}
+                    </em>
+                  </span>
                   <span>
                     {Math.round(m.value)}
                     {m.unit} / {m.goal}
@@ -141,7 +168,11 @@ export function TodayView({ tracker, profile }: TodayViewProps) {
             )
           })}
           {dayEntries.length > 0 ? (
-            <button type="button" className="btn-secondary danger-outline" onClick={clearDay}>
+            <button
+              type="button"
+              className="btn-secondary danger-outline"
+              onClick={requestClearDay}
+            >
               Clear all food for this day
             </button>
           ) : null}
@@ -157,7 +188,10 @@ export function TodayView({ tracker, profile }: TodayViewProps) {
               <header>
                 <div>
                   <h2>{meal}</h2>
-                  <p>{mealCals} kcal · {items.length} item{items.length === 1 ? '' : 's'}</p>
+                  <p className="meal-kcal">
+                    <strong>{mealCals}</strong> kcal · {items.length} item
+                    {items.length === 1 ? '' : 's'}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -176,9 +210,35 @@ export function TodayView({ tracker, profile }: TodayViewProps) {
                       <div>
                         <strong>{entry.name}</strong>
                         <span>
-                          {entry.servings}× · Protein {entry.protein}g · Carbs {entry.carbs}g ·
-                          Fat {entry.fat}g
+                          Protein {entry.protein}g · Carbs {entry.carbs}g · Fat{' '}
+                          {entry.fat}g
                         </span>
+                        <div className="servings-stepper" aria-label="Servings">
+                          <button
+                            type="button"
+                            className="icon-btn sm"
+                            aria-label="Decrease servings"
+                            onClick={() =>
+                              updateEntry(
+                                entry.id,
+                                Math.max(0.25, entry.servings - 0.25),
+                              )
+                            }
+                          >
+                            −
+                          </button>
+                          <span>{entry.servings}×</span>
+                          <button
+                            type="button"
+                            className="icon-btn sm"
+                            aria-label="Increase servings"
+                            onClick={() =>
+                              updateEntry(entry.id, entry.servings + 0.25)
+                            }
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
                       <div className="entry-actions">
                         <em>{entry.calories}</em>

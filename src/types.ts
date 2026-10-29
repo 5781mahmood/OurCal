@@ -101,6 +101,10 @@ export interface AppState {
   chatMessages: ChatMessage[]
   earnedBadges: EarnedBadge[]
   cloudUserId: string | null
+  /** Entry IDs deleted locally so sync does not resurrect them. */
+  deletedEntryIds: string[]
+  /** Friend usernames removed locally so sync does not resurrect them. */
+  deletedFriendUsernames: string[]
 }
 
 export type ViewId = 'today' | 'stats' | 'community' | 'profile'

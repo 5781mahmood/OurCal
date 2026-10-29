@@ -33,6 +33,8 @@ export const emptyState = (): AppState => ({
   chatMessages: [],
   earnedBadges: [],
   cloudUserId: null,
+  deletedEntryIds: [],
+  deletedFriendUsernames: [],
 })
 
 export function loadState(): AppState {
@@ -47,6 +49,9 @@ export function loadState(): AppState {
           profile: migrateProfile(parsed.profile as unknown as Record<string, unknown>),
           entries: Array.isArray(parsed.entries) ? parsed.entries : [],
           customFoods: Array.isArray(parsed.customFoods) ? parsed.customFoods : [],
+          friends: Array.isArray(parsed.friends) ? parsed.friends : [],
+          chatRooms: Array.isArray(parsed.chatRooms) ? parsed.chatRooms : [],
+          chatMessages: Array.isArray(parsed.chatMessages) ? parsed.chatMessages : [],
         }
         saveState(migrated)
         return migrated
@@ -63,6 +68,10 @@ export function loadState(): AppState {
       chatMessages: Array.isArray(parsed.chatMessages) ? parsed.chatMessages : [],
       earnedBadges: Array.isArray(parsed.earnedBadges) ? parsed.earnedBadges : [],
       cloudUserId: parsed.cloudUserId ?? null,
+      deletedEntryIds: Array.isArray(parsed.deletedEntryIds) ? parsed.deletedEntryIds : [],
+      deletedFriendUsernames: Array.isArray(parsed.deletedFriendUsernames)
+        ? parsed.deletedFriendUsernames
+        : [],
     }
   } catch {
     return emptyState()
@@ -100,5 +109,9 @@ export function parseImportJson(text: string): AppState {
     chatMessages: Array.isArray(data.chatMessages) ? data.chatMessages : [],
     earnedBadges: Array.isArray(data.earnedBadges) ? data.earnedBadges : [],
     cloudUserId: data.cloudUserId ?? null,
+    deletedEntryIds: Array.isArray(data.deletedEntryIds) ? data.deletedEntryIds : [],
+    deletedFriendUsernames: Array.isArray(data.deletedFriendUsernames)
+      ? data.deletedFriendUsernames
+      : [],
   }
 }

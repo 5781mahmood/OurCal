@@ -192,6 +192,11 @@ export function AddFoodModal({
             </label>
 
             <ul className="food-results">
+              {results.length === 0 && query.trim() ? (
+                <li className="meta food-empty">
+                  No foods match. Try another name or add a custom food.
+                </li>
+              ) : null}
               {results.map((food) => (
                 <li key={food.id}>
                   <button
