@@ -26,11 +26,19 @@ interface StatsViewProps {
 function levelColor(level: ReturnType<typeof macroLevel>): string {
   if (level === 'low') return '#c41e3a'
   if (level === 'mid') return '#c76b00'
+  if (level === 'over') return '#c41e3a'
   return '#1b7f3a'
 }
 
 export function StatsView({ tracker, profile }: StatsViewProps) {
-  const { state, dailySeries, streak, dayTotals } = tracker
+  const { state, dailySeries, streak } = tracker
+  const today = todayKey()
+
+  const todayEntries = useMemo(
+    () => state.entries.filter((e) => e.date === today),
+    [state.entries, today],
+  )
+  const todayTotals = useMemo(() => sumMacros(todayEntries), [todayEntries])
 
   const weekChart = useMemo(() => {
     return dailySeries.slice(-7).map((d) => ({
@@ -40,8 +48,10 @@ export function StatsView({ tracker, profile }: StatsViewProps) {
     }))
   }, [dailySeries, profile.calorieGoal])
 
+  const weekHasLogs = weekChart.some((d) => d.logged)
+
   const fourteen = useMemo(() => {
-    const keys = lastNDateKeys(todayKey(), 14)
+    const keys = lastNDateKeys(today, 14)
     const loggedDays = keys.filter((k) =>
       state.entries.some((e) => e.date === k),
     )
@@ -55,44 +65,47 @@ export function StatsView({ tracker, profile }: StatsViewProps) {
       loggedDays: loggedDays.length,
       avgCalories,
     }
-  }, [state.entries])
+  }, [state.entries, today])
 
   const macroPie = [
     {
       name: 'Protein',
-      value: Math.round(dayTotals.protein * 4),
-      level: macroLevel(dayTotals.protein, profile.macroGoals.protein),
+      value: Math.round(todayTotals.protein * 4),
+      level: macroLevel(todayTotals.protein, profile.macroGoals.protein),
     },
     {
       name: 'Carbs',
-      value: Math.round(dayTotals.carbs * 4),
-      level: macroLevel(dayTotals.carbs, profile.macroGoals.carbs),
+      value: Math.round(todayTotals.carbs * 4),
+      level: macroLevel(todayTotals.carbs, profile.macroGoals.carbs),
     },
     {
       name: 'Fat',
-      value: Math.round(dayTotals.fat * 9),
-      level: macroLevel(dayTotals.fat, profile.macroGoals.fat),
+      value: Math.round(todayTotals.fat * 9),
+      level: macroLevel(todayTotals.fat, profile.macroGoals.fat),
     },
   ].filter((s) => s.value > 0)
 
   const mealBreakdown = useMemo(() => {
     const meals = ['Breakfast', 'Lunch', 'Dinner', 'Snack'] as const
-    const today = todayKey()
-    const todayEntries = state.entries.filter((e) => e.date === today)
     return meals.map((meal) => ({
       meal,
       calories: todayEntries
         .filter((e) => e.meal === meal)
         .reduce((s, e) => s + e.calories, 0),
     }))
-  }, [state.entries])
+  }, [todayEntries])
+
+  const mealHasLogs = mealBreakdown.some((m) => m.calories > 0)
 
   return (
     <div className="stats view-enter">
       <header className="section-head">
         <p className="eyebrow">Insights</p>
         <h1>Your numbers</h1>
-        <p className="lede">Charts use only what you logged in this browser.</p>
+        <p className="lede">
+          Charts use calendar today ({format(parseISO(today), 'MMM d')}), not a
+          past diary day you may be browsing on Today.
+        </p>
       </header>
 
       <dl className="metric-list">
@@ -103,49 +116,57 @@ export function StatsView({ tracker, profile }: StatsViewProps) {
         <div>
           <dt>14-day average</dt>
           <dd>
-            {fourteen.avgCalories || '—'} kcal across {fourteen.loggedDays} logged days
+            {fourteen.avgCalories || '—'} kcal across {fourteen.loggedDays} logged
+            days
           </dd>
         </div>
         <div>
           <dt>Today vs goal</dt>
           <dd>
-            {dayTotals.calories} / {profile.calorieGoal} kcal
+            {todayTotals.calories} / {profile.calorieGoal} kcal
           </dd>
         </div>
       </dl>
 
       <section className="chart-panel">
         <h2>Last 7 days</h2>
-        <div className="chart-wrap">
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={weekChart} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#d2d2d7" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} />
-              <YAxis tickLine={false} axisLine={false} width={40} />
-              <Tooltip
-                formatter={(value) => [`${value} kcal`, 'Calories']}
-                labelFormatter={(_, payload) => {
-                  const row = payload?.[0]?.payload as { date?: string } | undefined
-                  return row?.date ? format(parseISO(row.date), 'MMM d, yyyy') : ''
-                }}
-              />
-              <Bar dataKey="calories" radius={[2, 2, 0, 0]}>
-                {weekChart.map((entry) => (
-                  <Cell
-                    key={entry.date}
-                    fill={
-                      entry.calories === 0
-                        ? '#d2d2d7'
-                        : entry.calories > profile.calorieGoal
-                          ? '#c41e3a'
-                          : '#00656b'
-                    }
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        {!weekHasLogs ? (
+          <p className="empty-meal">
+            No food logged in the last week. Log a meal on Today to see this
+            chart.
+          </p>
+        ) : (
+          <div className="chart-wrap">
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={weekChart} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#d2d2d7" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                <YAxis tickLine={false} axisLine={false} width={40} />
+                <Tooltip
+                  formatter={(value) => [`${value} kcal`, 'Calories']}
+                  labelFormatter={(_, payload) => {
+                    const row = payload?.[0]?.payload as { date?: string } | undefined
+                    return row?.date ? format(parseISO(row.date), 'MMM d, yyyy') : ''
+                  }}
+                />
+                <Bar dataKey="calories" radius={[2, 2, 0, 0]}>
+                  {weekChart.map((entry) => (
+                    <Cell
+                      key={entry.date}
+                      fill={
+                        entry.calories === 0
+                          ? '#d2d2d7'
+                          : entry.calories > profile.calorieGoal
+                            ? '#c41e3a'
+                            : '#00656b'
+                      }
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </section>
 
       <div className="charts-2">
@@ -186,26 +207,30 @@ export function StatsView({ tracker, profile }: StatsViewProps) {
 
         <section className="chart-panel">
           <h2>Today by meal</h2>
-          <ul className="meal-stat-list">
-            {mealBreakdown.map((m) => (
-              <li key={m.meal}>
-                <span>{m.meal}</span>
-                <div className="mini-track">
-                  <div
-                    className="mini-fill"
-                    style={{
-                      width: `${
-                        profile.calorieGoal > 0
-                          ? Math.min((m.calories / profile.calorieGoal) * 100, 100)
-                          : 0
-                      }%`,
-                    }}
-                  />
-                </div>
-                <strong>{m.calories}</strong>
-              </li>
-            ))}
-          </ul>
+          {!mealHasLogs ? (
+            <p className="empty-meal">Nothing logged for today yet.</p>
+          ) : (
+            <ul className="meal-stat-list">
+              {mealBreakdown.map((m) => (
+                <li key={m.meal}>
+                  <span>{m.meal}</span>
+                  <div className="mini-track">
+                    <div
+                      className="mini-fill"
+                      style={{
+                        width: `${
+                          profile.calorieGoal > 0
+                            ? Math.min((m.calories / profile.calorieGoal) * 100, 100)
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                  <strong>{m.calories}</strong>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </div>
     </div>

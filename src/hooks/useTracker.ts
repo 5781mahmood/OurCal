@@ -31,6 +31,7 @@ import {
   fetchRooms,
   isCloudEnabled,
   publishSharedFood,
+  pushCloudRoom,
   pushDiaryEntry,
   registerUsername,
   removeDiaryEntry,
@@ -51,6 +52,11 @@ function mergeById<T extends { id: string }>(local: T[], remote: T[]): T[] {
 function mergeByUsername(local: FriendLink[], remote: FriendLink[]): FriendLink[] {
   const seen = new Set(local.map((item) => item.username))
   return [...local, ...remote.filter((item) => !seen.has(item.username))]
+}
+
+function rememberIds(existing: string[], next: string[], cap = 500): string[] {
+  const set = new Set([...existing, ...next])
+  return Array.from(set).slice(-cap)
 }
 
 export function useTracker() {
@@ -77,11 +83,12 @@ export function useTracker() {
   useEffect(() => {
     if (!cloudUsername || !isCloudEnabled()) return
     let cancel = false
-    void (async () => {
+
+    async function syncOnce() {
       const [remoteEntries, remoteFriends, remoteRooms] = await Promise.all([
-        fetchDiary(cloudUsername),
-        fetchFriends(cloudUsername),
-        fetchRooms(cloudUsername),
+        fetchDiary(cloudUsername!),
+        fetchFriends(cloudUsername!),
+        fetchRooms(cloudUsername!),
       ])
       const remoteMessages = (
         await Promise.all(remoteRooms.map((room) => fetchMessages(room.id)))
@@ -89,30 +96,72 @@ export function useTracker() {
       if (cancel) return
 
       const localSnapshot = loadState()
+      const deletedEntries = new Set(localSnapshot.deletedEntryIds ?? [])
+      const deletedFriends = new Set(localSnapshot.deletedFriendUsernames ?? [])
+
       const remoteEntryIds = new Set(remoteEntries.map((e) => e.id))
       const remoteFriendNames = new Set(remoteFriends.map((f) => f.username))
-      const localOnlyEntries = localSnapshot.entries.filter((e) => !remoteEntryIds.has(e.id))
+      const remoteRoomIds = new Set(remoteRooms.map((r) => r.id))
+
+      const localOnlyEntries = localSnapshot.entries.filter(
+        (e) => !remoteEntryIds.has(e.id) && !deletedEntries.has(e.id),
+      )
       const localOnlyFriends = localSnapshot.friends.filter(
-        (f) => !remoteFriendNames.has(f.username),
+        (f) =>
+          !remoteFriendNames.has(f.username) && !deletedFriends.has(f.username),
+      )
+      const localOnlyRooms = localSnapshot.chatRooms.filter(
+        (r) => !remoteRoomIds.has(r.id),
       )
 
+      const reassertDeletes = await Promise.all([
+        ...[...deletedEntries]
+          .filter((id) => remoteEntryIds.has(id))
+          .map((id) => removeDiaryEntry(id)),
+        ...[...deletedFriends]
+          .filter((name) => remoteFriendNames.has(name))
+          .map((name) => deleteFriendship(cloudUsername!, name)),
+      ])
+      for (const result of reassertDeletes) {
+        if (!result.ok && result.error) {
+          if (!cancel) setErrorMessage(result.error)
+          break
+        }
+      }
+
       await Promise.all([
-        ...localOnlyEntries.map((entry) => pushDiaryEntry(cloudUsername, entry)),
-        ...localOnlyFriends.map((friend) => saveFriendship(cloudUsername, friend)),
+        ...localOnlyEntries.map((entry) => pushDiaryEntry(cloudUsername!, entry)),
+        ...localOnlyFriends.map((friend) => saveFriendship(cloudUsername!, friend)),
+        ...localOnlyRooms.map((room) => pushCloudRoom(room)),
       ])
 
       if (cancel) return
       setState((s) => {
         if (s.profile?.username !== cloudUsername) return s
-        const entries = mergeById(s.entries, remoteEntries)
-        const friends = mergeByUsername(s.friends, remoteFriends)
+        const tombstoneEntries = new Set(s.deletedEntryIds ?? [])
+        const tombstoneFriends = new Set(s.deletedFriendUsernames ?? [])
+        const entries = mergeById(
+          s.entries,
+          remoteEntries.filter((e) => !tombstoneEntries.has(e.id)),
+        )
+        const friends = mergeByUsername(
+          s.friends,
+          remoteFriends.filter((f) => !tombstoneFriends.has(f.username)),
+        )
         const chatRooms = mergeById(s.chatRooms, remoteRooms)
         const chatMessages = mergeById(s.chatMessages, remoteMessages)
         return { ...s, entries, friends, chatRooms, chatMessages }
       })
-    })()
+    }
+
+    void syncOnce()
+    const interval = window.setInterval(() => {
+      void syncOnce()
+    }, 45_000)
+
     return () => {
       cancel = true
+      window.clearInterval(interval)
     }
   }, [cloudUsername])
 
@@ -155,7 +204,6 @@ export function useTracker() {
   }, [streak, state.entries, state.friends, state.customFoods, state.profile])
 
   const setProfile = useCallback(async (profile: UserProfile) => {
-    // Always persist locally first so tracking never blocks on network.
     setState((s) => ({ ...s, profile }))
 
     if (!isCloudEnabled() || !profile.username) {
@@ -178,7 +226,6 @@ export function useTracker() {
         setStatusMessage('Profile saved and synced.')
         return true
       }
-      // Soft cloud failures still let the user into the app.
       if (reg.soft || reg.error?.includes('not configured')) {
         setErrorMessage(reg.error ?? 'Cloud sync unavailable. Using this device only.')
         setStatusMessage('Profile saved on this device.')
@@ -226,21 +273,72 @@ export function useTracker() {
         fat: Math.round(input.fat * servings * 10) / 10,
         createdAt: new Date().toISOString(),
       }
-      setState((s) => ({ ...s, entries: [...s.entries, entry] }))
-      if (state.profile) void pushDiaryEntry(state.profile.username, entry)
+      setState((s) => ({
+        ...s,
+        entries: [...s.entries, entry],
+        deletedEntryIds: (s.deletedEntryIds ?? []).filter((id) => id !== entry.id),
+      }))
+      if (state.profile) {
+        void pushDiaryEntry(state.profile.username, entry).then((result) => {
+          if (!result.ok && result.error) setErrorMessage(result.error)
+        })
+      }
       setStatusMessage(`${input.name} logged.`)
     },
     [selectedDate, state.profile],
   )
 
-  const deleteEntry = useCallback((id: string) => {
-    setState((s) => ({
-      ...s,
-      entries: s.entries.filter((e) => e.id !== id),
-    }))
-    void removeDiaryEntry(id)
-    setStatusMessage('Entry removed.')
-  }, [])
+  const updateEntry = useCallback(
+    (id: string, servings: number) => {
+      const nextServings = Math.max(0.25, servings)
+      const username = state.profile?.username
+      setState((s) => {
+        let updated: DiaryEntry | null = null
+        const entries = s.entries.map((entry) => {
+          if (entry.id !== id) return entry
+          const perServing = entry.servings > 0 ? 1 / entry.servings : 1
+          const baseCal = entry.calories * perServing
+          const baseP = entry.protein * perServing
+          const baseC = entry.carbs * perServing
+          const baseF = entry.fat * perServing
+          updated = {
+            ...entry,
+            servings: nextServings,
+            calories: Math.round(baseCal * nextServings),
+            protein: Math.round(baseP * nextServings * 10) / 10,
+            carbs: Math.round(baseC * nextServings * 10) / 10,
+            fat: Math.round(baseF * nextServings * 10) / 10,
+          }
+          return updated
+        })
+        if (updated && username) {
+          void pushDiaryEntry(username, updated).then((result) => {
+            if (!result.ok && result.error) setErrorMessage(result.error)
+          })
+        }
+        return { ...s, entries }
+      })
+      setStatusMessage('Servings updated.')
+    },
+    [state.profile?.username],
+  )
+
+  const deleteEntry = useCallback(
+    (id: string) => {
+      setState((s) => ({
+        ...s,
+        entries: s.entries.filter((e) => e.id !== id),
+        deletedEntryIds: rememberIds(s.deletedEntryIds ?? [], [id]),
+      }))
+      void removeDiaryEntry(id).then((result) => {
+        if (!result.ok && isCloudEnabled() && result.error) {
+          setErrorMessage(result.error)
+        }
+      })
+      setStatusMessage('Entry removed.')
+    },
+    [],
+  )
 
   const addCustomFood = useCallback(
     async (
@@ -270,13 +368,23 @@ export function useTracker() {
   )
 
   const clearDay = useCallback(() => {
+    const dayIds = state.entries
+      .filter((e) => e.date === selectedDate)
+      .map((e) => e.id)
     setState((s) => ({
       ...s,
       entries: s.entries.filter((e) => e.date !== selectedDate),
+      deletedEntryIds: rememberIds(s.deletedEntryIds ?? [], dayIds),
     }))
-    if (state.profile) void clearDiaryDay(state.profile.username, selectedDate)
+    if (state.profile) {
+      void clearDiaryDay(state.profile.username, selectedDate).then((result) => {
+        if (!result.ok && isCloudEnabled() && result.error) {
+          setErrorMessage(result.error)
+        }
+      })
+    }
     setStatusMessage('All food cleared for this day.')
-  }, [selectedDate, state.profile])
+  }, [selectedDate, state.profile, state.entries])
 
   const resetAll = useCallback(() => {
     setState(emptyState())
@@ -309,15 +417,31 @@ export function useTracker() {
   }, [state.entries])
 
   const addFriend = useCallback(
-    (friend: FriendLink) => {
+    (friend: FriendLink): 'added' | 'exists' => {
+      const already = state.friends.some((f) => f.username === friend.username)
+      if (already) {
+        setStatusMessage(`Already friends with @${friend.username}.`)
+        return 'exists'
+      }
       setState((s) => {
         if (s.friends.some((f) => f.username === friend.username)) return s
-        return { ...s, friends: [friend, ...s.friends] }
+        return {
+          ...s,
+          friends: [friend, ...s.friends],
+          deletedFriendUsernames: (s.deletedFriendUsernames ?? []).filter(
+            (u) => u !== friend.username,
+          ),
+        }
       })
-      if (state.profile) void saveFriendship(state.profile.username, friend)
+      if (state.profile) {
+        void saveFriendship(state.profile.username, friend).then((res) => {
+          if (!res.ok && isCloudEnabled() && res.error) setErrorMessage(res.error)
+        })
+      }
       setStatusMessage(`Added @${friend.username}.`)
+      return 'added'
     },
-    [state.profile],
+    [state.profile, state.friends],
   )
 
   const removeFriend = useCallback(
@@ -325,8 +449,16 @@ export function useTracker() {
       setState((s) => ({
         ...s,
         friends: s.friends.filter((f) => f.username !== username),
+        deletedFriendUsernames: rememberIds(s.deletedFriendUsernames ?? [], [
+          username,
+        ]),
       }))
-      if (state.profile) void deleteFriendship(state.profile.username, username)
+      if (state.profile) {
+        void deleteFriendship(state.profile.username, username).then((res) => {
+          if (!res.ok && isCloudEnabled() && res.error) setErrorMessage(res.error)
+        })
+      }
+      setStatusMessage(`Removed @${username}.`)
     },
     [state.profile],
   )
@@ -345,12 +477,16 @@ export function useTracker() {
         ? s.chatRooms
         : [room, ...s.chatRooms],
     }))
+    if (!remote && isCloudEnabled()) {
+      void pushCloudRoom(room)
+    }
     return room
   }, [])
 
   const sendChatMessage = useCallback(
-    async (roomId: string, body: string) => {
-      if (!state.profile || !body.trim()) return
+    async (roomId: string, body: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!state.profile) return { ok: false, error: 'No profile.' }
+      if (!body.trim()) return { ok: false, error: 'Type a message first.' }
       const draft = {
         roomId,
         authorUsername: state.profile.username,
@@ -358,6 +494,11 @@ export function useTracker() {
         body: body.trim(),
       }
       const remote = isCloudEnabled() ? await sendCloudMessage(draft) : null
+      if (isCloudEnabled() && !remote) {
+        const err = 'Could not send message. Try again.'
+        setErrorMessage(err)
+        return { ok: false, error: err }
+      }
       const msg: ChatMessage = remote ?? {
         ...draft,
         id: uid(),
@@ -367,6 +508,7 @@ export function useTracker() {
         if (s.chatMessages.some((item) => item.id === msg.id)) return s
         return { ...s, chatMessages: [...s.chatMessages, msg] }
       })
+      return { ok: true }
     },
     [state.profile],
   )
@@ -376,12 +518,20 @@ export function useTracker() {
       if (!s.profile) return s
       return { ...s, profile: { ...s.profile, avatarUrl } }
     })
-    setStatusMessage('Profile photo updated.')
+    setStatusMessage(avatarUrl ? 'Profile photo updated.' : 'Photo removed.')
   }, [])
 
   const dismissMessages = useCallback(() => {
     setStatusMessage(null)
     setErrorMessage(null)
+  }, [])
+
+  const flashError = useCallback((message: string) => {
+    setErrorMessage(message)
+  }, [])
+
+  const flashStatus = useCallback((message: string) => {
+    setStatusMessage(message)
   }, [])
 
   return {
@@ -393,6 +543,7 @@ export function useTracker() {
     dayTotals,
     setProfile,
     addEntry,
+    updateEntry,
     deleteEntry,
     addCustomFood,
     clearDay,
@@ -412,6 +563,8 @@ export function useTracker() {
     statusMessage,
     errorMessage,
     dismissMessages,
+    flashError,
+    flashStatus,
   }
 }
 

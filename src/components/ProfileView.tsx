@@ -58,7 +58,8 @@ export function ProfileView({ tracker, profile }: ProfileViewProps) {
       const dataUrl = await compressImageFile(file)
       updateAvatar(dataUrl)
       if (cloudEnabled) {
-        void updateCloudAvatar(profile.username, dataUrl)
+        const cloud = await updateCloudAvatar(profile.username, dataUrl)
+        if (!cloud.ok) setError(cloud.error ?? 'Could not sync photo.')
       }
       setMessage('Profile photo updated.')
       setError('')
@@ -68,10 +69,24 @@ export function ProfileView({ tracker, profile }: ProfileViewProps) {
     }
   }
 
+  async function removePhoto() {
+    updateAvatar('')
+    if (cloudEnabled) {
+      const cloud = await updateCloudAvatar(profile.username, '')
+      if (!cloud.ok) {
+        setError(cloud.error ?? 'Could not clear cloud photo.')
+        return
+      }
+    }
+    setMessage('Photo removed.')
+    setError('')
+  }
+
   if (editing) {
     return (
       <Onboarding
         initial={profile}
+        onCancel={() => setEditing(false)}
         onComplete={async (p) => {
           const ok = await setProfile(p)
           if (ok) {
@@ -98,6 +113,9 @@ export function ProfileView({ tracker, profile }: ProfileViewProps) {
           <p className="eyebrow">Profile</p>
           <h1>{profile.name}</h1>
           <p className="meta">@{profile.username}</p>
+          <p className="meta cloud-status">
+            {cloudEnabled ? 'Synced' : 'This device only'}
+          </p>
         </div>
         <div className="btn-row">
           <button type="button" className="btn-secondary" onClick={() => avatarRef.current?.click()}>
@@ -107,10 +125,7 @@ export function ProfileView({ tracker, profile }: ProfileViewProps) {
             <button
               type="button"
               className="btn-ghost danger"
-              onClick={() => {
-                updateAvatar('')
-                setMessage('Photo removed.')
-              }}
+              onClick={() => void removePhoto()}
             >
               Remove photo
             </button>
@@ -153,8 +168,20 @@ export function ProfileView({ tracker, profile }: ProfileViewProps) {
           <div>
             <dt>Macros</dt>
             <dd>
-              Protein {profile.macroGoals.protein}g · Carbs {profile.macroGoals.carbs}g · Fat{' '}
-              {profile.macroGoals.fat}g
+              <ul className="macro-goal-cols">
+                <li>
+                  <em>Protein</em>
+                  <strong>{profile.macroGoals.protein}g</strong>
+                </li>
+                <li>
+                  <em>Carbs</em>
+                  <strong>{profile.macroGoals.carbs}g</strong>
+                </li>
+                <li>
+                  <em>Fat</em>
+                  <strong>{profile.macroGoals.fat}g</strong>
+                </li>
+              </ul>
             </dd>
           </div>
           <div>

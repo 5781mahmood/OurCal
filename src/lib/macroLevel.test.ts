@@ -6,5 +6,6 @@ describe('macroLevel', () => {
     expect(macroLevel(40, 100)).toBe('low')
     expect(macroLevel(60, 100)).toBe('mid')
     expect(macroLevel(90, 100)).toBe('high')
+    expect(macroLevel(110, 100)).toBe('over')
   })
 })

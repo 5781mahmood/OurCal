@@ -12,6 +12,7 @@ import { isValidUsername, normalizeUsername, usernameHint } from '../lib/usernam
 interface OnboardingProps {
   onComplete: (profile: UserProfile) => Promise<boolean>
   initial?: UserProfile | null
+  onCancel?: () => void
 }
 
 function suggestUsername(name: string): string {
@@ -24,7 +25,7 @@ function suggestUsername(name: string): string {
   return base.length >= 3 ? base : 'ourcal user'
 }
 
-export function Onboarding({ onComplete, initial }: OnboardingProps) {
+export function Onboarding({ onComplete, initial, onCancel }: OnboardingProps) {
   const [name, setName] = useState(initial?.name ?? '')
   const [username, setUsername] = useState(initial?.username ?? '')
   const [avatarUrl, setAvatarUrl] = useState(initial?.avatarUrl ?? '')
@@ -296,9 +297,16 @@ export function Onboarding({ onComplete, initial }: OnboardingProps) {
 
           {error ? <p className="form-error">{error}</p> : null}
 
-          <button type="submit" className="btn-primary" disabled={busy || photoBusy}>
-            {busy ? 'Saving…' : initial ? 'Save profile' : 'Start tracking'}
-          </button>
+          <div className="btn-row">
+            <button type="submit" className="btn-primary" disabled={busy || photoBusy}>
+              {busy ? 'Saving…' : initial ? 'Save profile' : 'Start tracking'}
+            </button>
+            {onCancel ? (
+              <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
+                Cancel
+              </button>
+            ) : null}
+          </div>
         </form>
       </div>
     </div>

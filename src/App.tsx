@@ -6,6 +6,8 @@ import { TodayView } from './components/TodayView'
 import { ProfileView } from './components/ProfileView'
 import { LandingPage } from './pages/LandingPage'
 import { NotFoundPage } from './pages/NotFoundPage'
+import { lookupProfileByUsername } from './lib/cloud'
+import { parseInvite } from './lib/invite'
 import type { ViewId } from './types'
 import './index.css'
 
@@ -59,18 +61,44 @@ function TrackerApp() {
   const inviteHandled = useRef<string | null>(null)
 
   useEffect(() => {
-    const u = params.get('u')
-    if (!u || !tracker.profile || inviteHandled.current === u) return
-    inviteHandled.current = u
-    const username = u.replace('@', '').toLowerCase()
-    if (username === tracker.profile.username) return
-    tracker.addFriend({
-      username,
-      displayName: username,
-      avatarUrl: '',
-      addedAt: new Date().toISOString(),
-    })
-    setView('community')
+    const raw = params.get('u')
+    if (!raw || !tracker.profile || inviteHandled.current === raw) return
+    const username = parseInvite(raw) ?? parseInvite(`@${raw}`)
+    if (!username) return
+    inviteHandled.current = raw
+    if (username === tracker.profile.username) {
+      setView('community')
+      return
+    }
+
+    let cancelled = false
+    void (async () => {
+      let displayName = username
+      let avatarUrl = ''
+      if (tracker.cloudEnabled) {
+        const remote = await lookupProfileByUsername(username)
+        if (cancelled) return
+        if (!remote) {
+          tracker.flashError('No OurCal user with that username.')
+          setView('community')
+          return
+        }
+        displayName = remote.displayName
+        avatarUrl = remote.avatarUrl
+      }
+      if (cancelled) return
+      tracker.addFriend({
+        username,
+        displayName,
+        avatarUrl,
+        addedAt: new Date().toISOString(),
+      })
+      setView('community')
+    })()
+
+    return () => {
+      cancelled = true
+    }
   }, [params, tracker.profile, tracker])
 
   if (!tracker.profile) {

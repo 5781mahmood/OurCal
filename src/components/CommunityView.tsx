@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Html5Qrcode } from 'html5-qrcode'
+import { format, parseISO } from 'date-fns'
 import type { TrackerApi } from '../hooks/useTracker'
 import { lookupProfileByUsername } from '../lib/cloud'
+import { buildInviteUrl, parseInvite } from '../lib/invite'
 import type { UserProfile } from '../types'
 
 interface CommunityViewProps {
@@ -10,23 +12,12 @@ interface CommunityViewProps {
   profile: UserProfile
 }
 
-function parseInvite(input: string): string | null {
-  const trimmed = input.trim()
-  if (!trimmed) return null
+function shortTime(iso: string): string {
   try {
-    const url = new URL(trimmed)
-    const u = url.searchParams.get('u') ?? url.pathname.split('/').pop()
-    if (u) {
-      const decoded = decodeURIComponent(u).replace('@', '').trim().toLowerCase()
-      if (/^[a-z0-9_ ]{3,20}$/.test(decoded)) return decoded
-    }
+    return format(parseISO(iso), 'h:mm a')
   } catch {
-    /* not a url */
+    return ''
   }
-  const handle = trimmed.startsWith('@') ? trimmed.slice(1) : trimmed
-  const normalized = handle.trim().replace(/\s+/g, ' ').toLowerCase()
-  if (/^[a-z0-9_ ]{3,20}$/.test(normalized)) return normalized
-  return null
 }
 
 export function CommunityView({ tracker, profile }: CommunityViewProps) {
@@ -44,12 +35,11 @@ export function CommunityView({ tracker, profile }: CommunityViewProps) {
   const [scanning, setScanning] = useState(false)
   const [activeRoom, setActiveRoom] = useState(state.chatRooms[0]?.id ?? '')
   const [draft, setDraft] = useState('')
+  const [composeError, setComposeError] = useState('')
+  const [copyNote, setCopyNote] = useState('')
   const scannerRef = useRef<Html5Qrcode | null>(null)
 
-  const inviteUrl =
-    typeof window !== 'undefined'
-      ? `${window.location.origin}/app/community?u=${encodeURIComponent(profile.username)}`
-      : `https://ourcal-pi.vercel.app/app/community?u=${encodeURIComponent(profile.username)}`
+  const inviteUrl = buildInviteUrl(profile.username)
 
   const roomMessages = useMemo(
     () =>
@@ -81,10 +71,12 @@ export function CommunityView({ tracker, profile }: CommunityViewProps) {
     let avatarUrl = ''
     if (cloudEnabled) {
       const remote = await lookupProfileByUsername(username)
-      if (remote) {
-        displayName = remote.displayName
-        avatarUrl = remote.avatarUrl
+      if (!remote) {
+        setFriendError('No OurCal user with that username.')
+        return
       }
+      displayName = remote.displayName
+      avatarUrl = remote.avatarUrl
     }
 
     addFriend({
@@ -94,6 +86,16 @@ export function CommunityView({ tracker, profile }: CommunityViewProps) {
       addedAt: new Date().toISOString(),
     })
     setFriendInput('')
+  }
+
+  async function copyInvite() {
+    try {
+      await navigator.clipboard.writeText(inviteUrl)
+      setCopyNote('Invite link copied.')
+      window.setTimeout(() => setCopyNote(''), 2500)
+    } catch {
+      setFriendError('Could not copy. Select and copy the link manually.')
+    }
   }
 
   async function toggleScanner() {
@@ -150,12 +152,32 @@ export function CommunityView({ tracker, profile }: CommunityViewProps) {
   }
 
   async function startGroupChat() {
+    if (state.friends.length === 0) {
+      setFriendError('Add a friend before starting a group thread.')
+      return
+    }
     const members = [
       profile.username,
       ...state.friends.slice(0, 4).map((f) => f.username),
     ]
     const room = await createChatRoom('Group check-in', members)
     setActiveRoom(room.id)
+  }
+
+  async function onSend(e: React.FormEvent) {
+    e.preventDefault()
+    setComposeError('')
+    if (!draft.trim()) {
+      setComposeError('Type a message first.')
+      return
+    }
+    if (!activeRoom) return
+    const result = await sendChatMessage(activeRoom, draft)
+    if (!result.ok) {
+      setComposeError(result.error ?? 'Could not send.')
+      return
+    }
+    setDraft('')
   }
 
   return (
@@ -183,6 +205,10 @@ export function CommunityView({ tracker, profile }: CommunityViewProps) {
           <div className="qr-block">
             <QRCodeSVG value={inviteUrl} size={132} bgColor="#f5f5f7" fgColor="#1d1d1f" />
             <p className="meta">Scan or share this code to connect.</p>
+            <button type="button" className="btn-secondary" onClick={() => void copyInvite()}>
+              Copy invite link
+            </button>
+            {copyNote ? <p className="toast inline success">{copyNote}</p> : null}
           </div>
           <label className="field">
             Username or invite link
@@ -227,7 +253,11 @@ export function CommunityView({ tracker, profile }: CommunityViewProps) {
                     <p className="meta">@{f.username}</p>
                   </div>
                   <div className="friend-actions">
-                    <button type="button" className="btn-secondary" onClick={() => void startDm(f.username)}>
+                    <button
+                      type="button"
+                      className="btn-primary sm"
+                      onClick={() => void startDm(f.username)}
+                    >
                       Message
                     </button>
                     <button
@@ -248,10 +278,23 @@ export function CommunityView({ tracker, profile }: CommunityViewProps) {
       <section className="panel chat-panel">
         <header className="chat-head">
           <h2>Chat</h2>
-          <button type="button" className="btn-secondary" onClick={() => void startGroupChat()}>
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={state.friends.length === 0}
+            title={
+              state.friends.length === 0
+                ? 'Add a friend before starting a group thread'
+                : undefined
+            }
+            onClick={() => void startGroupChat()}
+          >
             New group thread
           </button>
         </header>
+        {state.friends.length === 0 ? (
+          <p className="meta chat-hint">Add a friend before you can start a group thread.</p>
+        ) : null}
         <div className="chat-layout">
           <ul className="room-list">
             {state.chatRooms.length === 0 ? (
@@ -276,24 +319,32 @@ export function CommunityView({ tracker, profile }: CommunityViewProps) {
                 <ul className="message-list">
                   {roomMessages.map((m) => (
                     <li key={m.id} className={m.authorUsername === profile.username ? 'mine' : ''}>
-                      <strong>{m.authorName}</strong>
+                      <div className="msg-meta">
+                        <strong>{m.authorName}</strong>
+                        <time dateTime={m.createdAt}>{shortTime(m.createdAt)}</time>
+                      </div>
                       <p>{m.body}</p>
                     </li>
                   ))}
                 </ul>
-                <form
-                  className="chat-compose"
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    sendChatMessage(activeRoom, draft)
-                    setDraft('')
-                  }}
-                >
-                  <input value={draft} onChange={(e) => setDraft(e.target.value)} />
-                  <button type="submit" className="btn-primary">
+                <form className="chat-compose" onSubmit={(e) => void onSend(e)}>
+                  <label className="field compose-field">
+                    Message
+                    <input
+                      value={draft}
+                      onChange={(e) => {
+                        setDraft(e.target.value)
+                        if (composeError) setComposeError('')
+                      }}
+                      placeholder="Write a check-in…"
+                      aria-invalid={composeError ? true : undefined}
+                    />
+                  </label>
+                  <button type="submit" className="btn-primary" disabled={!draft.trim()}>
                     Send
                   </button>
                 </form>
+                {composeError ? <p className="form-error compose-error">{composeError}</p> : null}
               </>
             ) : (
               <p className="meta">Select a thread.</p>
