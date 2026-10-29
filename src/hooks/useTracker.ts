@@ -19,6 +19,7 @@ import {
 import { sumMacros } from '../lib/nutrition'
 import { lastNDateKeys, todayKey } from '../lib/dates'
 import { evaluateBadges } from '../lib/badges'
+import { computeStreak } from '../lib/streak'
 import {
   clearDiaryDay,
   createCloudRoom,
@@ -86,6 +87,21 @@ export function useTracker() {
         await Promise.all(remoteRooms.map((room) => fetchMessages(room.id)))
       ).flat()
       if (cancel) return
+
+      const localSnapshot = loadState()
+      const remoteEntryIds = new Set(remoteEntries.map((e) => e.id))
+      const remoteFriendNames = new Set(remoteFriends.map((f) => f.username))
+      const localOnlyEntries = localSnapshot.entries.filter((e) => !remoteEntryIds.has(e.id))
+      const localOnlyFriends = localSnapshot.friends.filter(
+        (f) => !remoteFriendNames.has(f.username),
+      )
+
+      await Promise.all([
+        ...localOnlyEntries.map((entry) => pushDiaryEntry(cloudUsername, entry)),
+        ...localOnlyFriends.map((friend) => saveFriendship(cloudUsername, friend)),
+      ])
+
+      if (cancel) return
       setState((s) => {
         if (s.profile?.username !== cloudUsername) return s
         const entries = mergeById(s.entries, remoteEntries)
@@ -117,21 +133,10 @@ export function useTracker() {
     }
   }, [roomKey])
 
-  const streak = useMemo(() => {
-    let count = 0
-    const keys = lastNDateKeys(todayKey(), 60).reverse()
-    let started = false
-    for (const key of keys) {
-      const has = state.entries.some((e) => e.date === key)
-      if (!started) {
-        if (key === todayKey() && !has) continue
-        started = true
-      }
-      if (!has) break
-      count += 1
-    }
-    return count
-  }, [state.entries])
+  const streak = useMemo(
+    () => computeStreak(state.entries.map((e) => e.date)),
+    [state.entries],
+  )
 
   useEffect(() => {
     setState((s) => {

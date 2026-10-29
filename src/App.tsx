@@ -1,15 +1,20 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
 import { useTracker } from './hooks/useTracker'
 import { Onboarding } from './components/Onboarding'
 import { TodayView } from './components/TodayView'
-import { StatsView } from './components/StatsView'
 import { ProfileView } from './components/ProfileView'
-import { CommunityView } from './components/CommunityView'
 import { LandingPage } from './pages/LandingPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import type { ViewId } from './types'
 import './index.css'
+
+const StatsView = lazy(() =>
+  import('./components/StatsView').then((m) => ({ default: m.StatsView })),
+)
+const CommunityView = lazy(() =>
+  import('./components/CommunityView').then((m) => ({ default: m.CommunityView })),
+)
 
 const NAV: { id: ViewId; label: string }[] = [
   { id: 'today', label: 'Today' },
@@ -40,6 +45,10 @@ function StatusToasts({
       {error ? <p className="toast error">{error}</p> : null}
     </div>
   )
+}
+
+function ViewFallback() {
+  return <p className="meta view-fallback">Loading…</p>
 }
 
 function TrackerApp() {
@@ -99,18 +108,20 @@ function TrackerApp() {
       </aside>
 
       <main className="app-main">
-        {view === 'today' ? (
-          <TodayView tracker={tracker} profile={tracker.profile} />
-        ) : null}
-        {view === 'stats' ? (
-          <StatsView tracker={tracker} profile={tracker.profile} />
-        ) : null}
-        {view === 'community' ? (
-          <CommunityView tracker={tracker} profile={tracker.profile} />
-        ) : null}
-        {view === 'profile' ? (
-          <ProfileView tracker={tracker} profile={tracker.profile} />
-        ) : null}
+        <Suspense fallback={<ViewFallback />}>
+          {view === 'today' ? (
+            <TodayView tracker={tracker} profile={tracker.profile} />
+          ) : null}
+          {view === 'stats' ? (
+            <StatsView tracker={tracker} profile={tracker.profile} />
+          ) : null}
+          {view === 'community' ? (
+            <CommunityView tracker={tracker} profile={tracker.profile} />
+          ) : null}
+          {view === 'profile' ? (
+            <ProfileView tracker={tracker} profile={tracker.profile} />
+          ) : null}
+        </Suspense>
       </main>
 
       <nav className="mobile-nav" aria-label="Primary">
