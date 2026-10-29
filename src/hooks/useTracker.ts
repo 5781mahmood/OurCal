@@ -155,27 +155,44 @@ export function useTracker() {
   }, [streak, state.entries, state.friends, state.customFoods, state.profile])
 
   const setProfile = useCallback(async (profile: UserProfile) => {
-    if (isCloudEnabled() && profile.username) {
+    // Always persist locally first so tracking never blocks on network.
+    setState((s) => ({ ...s, profile }))
+
+    if (!isCloudEnabled() || !profile.username) {
+      setStatusMessage('Profile saved on this device.')
+      return true
+    }
+
+    try {
       const reg = await registerUsername(
         profile.username,
         profile.name,
         profile.avatarUrl,
       )
-      if (!reg.ok && reg.error && !reg.error.includes('not configured')) {
-        setErrorMessage(reg.error)
-        return false
+      if (reg.ok) {
+        setState((s) => ({
+          ...s,
+          profile,
+          cloudUserId: reg.userId ?? s.cloudUserId,
+        }))
+        setStatusMessage('Profile saved and synced.')
+        return true
       }
-      setState((s) => ({
-        ...s,
-        profile,
-        cloudUserId: reg.userId ?? s.cloudUserId,
-      }))
-      setStatusMessage('Profile saved.')
+      // Soft cloud failures still let the user into the app.
+      if (reg.soft || reg.error?.includes('not configured')) {
+        setErrorMessage(reg.error ?? 'Cloud sync unavailable. Using this device only.')
+        setStatusMessage('Profile saved on this device.')
+        return true
+      }
+      setErrorMessage(reg.error ?? 'Could not sync username.')
+      setStatusMessage('Profile saved on this device.')
+      return true
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Network error'
+      setErrorMessage(`Cloud sync skipped (${message}). You can still track locally.`)
+      setStatusMessage('Profile saved on this device.')
       return true
     }
-    setState((s) => ({ ...s, profile }))
-    setStatusMessage('Profile saved.')
-    return true
   }, [])
 
   const dayEntries = useMemo(

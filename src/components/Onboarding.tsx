@@ -6,6 +6,8 @@ import {
   buildSuggestedProfile,
   estimateTdee,
 } from '../lib/nutrition'
+import { compressImageFile } from '../lib/image'
+import { isValidUsername, normalizeUsername, usernameHint } from '../lib/username'
 
 interface OnboardingProps {
   onComplete: (profile: UserProfile) => Promise<boolean>
@@ -16,10 +18,10 @@ function suggestUsername(name: string): string {
   const base = name
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 16)
-  return base.length >= 3 ? base : 'ourcal_user'
+    .replace(/[^a-z0-9 ]+/g, '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 20)
+  return base.length >= 3 ? base : 'ourcal user'
 }
 
 export function Onboarding({ onComplete, initial }: OnboardingProps) {
@@ -35,14 +37,16 @@ export function Onboarding({ onComplete, initial }: OnboardingProps) {
   )
   const [goal, setGoal] = useState<GoalType>(initial?.goal ?? 'maintain')
   const [error, setError] = useState('')
+  const [photoNote, setPhotoNote] = useState('')
   const [busy, setBusy] = useState(false)
+  const [photoBusy, setPhotoBusy] = useState(false)
 
   const preview = useMemo(() => {
     const a = Number(age)
     const h = Number(heightCm)
     const w = Number(weightKg)
     if (![a, h, w].every((n) => Number.isFinite(n) && n > 0)) return null
-    const handle = username.trim() || suggestUsername(name)
+    const handle = normalizeUsername(username) || suggestUsername(name)
     return buildSuggestedProfile({
       name: name.trim() || 'You',
       username: handle,
@@ -58,15 +62,18 @@ export function Onboarding({ onComplete, initial }: OnboardingProps) {
 
   async function onAvatarPick(file: File | undefined) {
     if (!file) return
-    if (file.size > 800_000) {
-      setError('Use a photo under 800 KB or crop before upload.')
-      return
+    setError('')
+    setPhotoNote('')
+    setPhotoBusy(true)
+    try {
+      const dataUrl = await compressImageFile(file)
+      setAvatarUrl(dataUrl)
+      setPhotoNote('Photo resized for the app. You can remove it anytime.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not use that photo.')
+    } finally {
+      setPhotoBusy(false)
     }
-    const reader = new FileReader()
-    reader.onload = () => {
-      if (typeof reader.result === 'string') setAvatarUrl(reader.result)
-    }
-    reader.readAsDataURL(file)
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -79,20 +86,33 @@ export function Onboarding({ onComplete, initial }: OnboardingProps) {
       setError('Add your display name.')
       return
     }
-    if (!/^[a-z0-9_]{3,20}$/i.test(preview.username)) {
-      setError('Username must be 3–20 characters: letters, numbers, underscore.')
+    if (!isValidUsername(preview.username)) {
+      setError(usernameHint())
       return
     }
     setError('')
     setBusy(true)
-    const ok = await onComplete({
-      ...preview,
-      name: name.trim(),
-      username: preview.username.toLowerCase(),
-    })
-    setBusy(false)
-    if (!ok) setError('Could not save profile. Check username availability.')
+    try {
+      await onComplete({
+        ...preview,
+        name: name.trim(),
+        username: normalizeUsername(preview.username),
+      })
+    } catch (err) {
+      // Should not block entry; still show a readable note.
+      setError(
+        err instanceof Error
+          ? `Saved with a sync warning: ${err.message}`
+          : 'Profile saved on this device.',
+      )
+    } finally {
+      setBusy(false)
+    }
   }
+
+  const tdee =
+    preview &&
+    estimateTdee(sex, Number(weightKg), Number(heightCm), Number(age), activity)
 
   return (
     <div className="onboard">
@@ -100,8 +120,8 @@ export function Onboarding({ onComplete, initial }: OnboardingProps) {
         <p className="eyebrow">OurCal</p>
         <h1>Set your daily target</h1>
         <p className="lede">
-          Mifflin–St Jeor estimates your calories. Pick a global username for friends
-          and QR invites.
+          Mifflin–St Jeor estimates your calories. Pick a username for friends and QR
+          invites. You can start tracking even if cloud sync is offline.
         </p>
 
         <form className="onboard-form" onSubmit={(e) => void handleSubmit(e)}>
@@ -121,19 +141,50 @@ export function Onboarding({ onComplete, initial }: OnboardingProps) {
             Username
             <input
               value={username}
-              onChange={(e) => setUsername(e.target.value.toLowerCase())}
+              onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
+              maxLength={20}
             />
+            <span className="field-hint">{usernameHint()}</span>
           </label>
 
-          <label>
-            Profile photo
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={(e) => void onAvatarPick(e.target.files?.[0])}
-            />
-          </label>
+          <div className="avatar-picker">
+            <div className="avatar lg preview">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Profile preview" />
+              ) : (
+                <span>{(name.trim() || '?').slice(0, 1).toUpperCase()}</span>
+              )}
+            </div>
+            <div className="avatar-picker-actions">
+              <label className="btn-secondary file-label">
+                {photoBusy ? 'Resizing…' : 'Choose photo'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  hidden
+                  disabled={photoBusy}
+                  onChange={(e) => {
+                    void onAvatarPick(e.target.files?.[0])
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+              {avatarUrl ? (
+                <button
+                  type="button"
+                  className="btn-ghost danger"
+                  onClick={() => {
+                    setAvatarUrl('')
+                    setPhotoNote('Photo removed.')
+                  }}
+                >
+                  Remove photo
+                </button>
+              ) : null}
+              {photoNote ? <p className="field-hint">{photoNote}</p> : null}
+            </div>
+          </div>
 
           <div className="row-2">
             <label>
@@ -213,39 +264,40 @@ export function Onboarding({ onComplete, initial }: OnboardingProps) {
             ))}
           </fieldset>
 
-          {preview ? (
+          {preview && tdee ? (
             <div className="estimate">
               <div>
                 <span>Maintenance (TDEE)</span>
-                <strong>
-                  {estimateTdee(
-                    sex,
-                    Number(weightKg),
-                    Number(heightCm),
-                    Number(age),
-                    activity,
-                  )}{' '}
-                  kcal
-                </strong>
+                <strong className="estimate-num">{tdee} kcal</strong>
               </div>
               <div>
                 <span>Your daily goal</span>
-                <strong>{preview.calorieGoal} kcal</strong>
+                <strong className="estimate-num">{preview.calorieGoal} kcal</strong>
               </div>
-              <div>
+              <div className="estimate-macros">
                 <span>Macros</span>
-                <strong>
-                  P {preview.macroGoals.protein}g · C {preview.macroGoals.carbs}g · F{' '}
-                  {preview.macroGoals.fat}g
-                </strong>
+                <ul>
+                  <li>
+                    <em>Protein</em>
+                    <strong>{preview.macroGoals.protein}g</strong>
+                  </li>
+                  <li>
+                    <em>Carbs</em>
+                    <strong>{preview.macroGoals.carbs}g</strong>
+                  </li>
+                  <li>
+                    <em>Fat</em>
+                    <strong>{preview.macroGoals.fat}g</strong>
+                  </li>
+                </ul>
               </div>
             </div>
           ) : null}
 
           {error ? <p className="form-error">{error}</p> : null}
 
-          <button type="submit" className="btn-primary" disabled={busy}>
-            {initial ? 'Save profile' : 'Start tracking'}
+          <button type="submit" className="btn-primary" disabled={busy || photoBusy}>
+            {busy ? 'Saving…' : initial ? 'Save profile' : 'Start tracking'}
           </button>
         </form>
       </div>
