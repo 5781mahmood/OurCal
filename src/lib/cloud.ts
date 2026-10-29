@@ -28,45 +28,66 @@ export async function registerUsername(
   username: string,
   displayName: string,
   avatarUrl: string,
-): Promise<{ ok: boolean; error?: string; userId?: string }> {
+): Promise<{ ok: boolean; error?: string; userId?: string; soft?: boolean }> {
   const sb = getSupabase()
-  if (!sb) return { ok: false, error: 'Cloud sync is not configured on this deployment.' }
+  if (!sb) return { ok: false, error: 'Cloud sync is not configured on this deployment.', soft: true }
 
-  const normalized = username.trim().toLowerCase()
-  if (!/^[a-z0-9_]{3,20}$/.test(normalized)) {
-    return { ok: false, error: 'Username must be 3–20 characters: letters, numbers, underscore.' }
+  const normalized = username.trim().replace(/\s+/g, ' ').toLowerCase()
+  if (!/^[a-z0-9_ ]{3,20}$/.test(normalized)) {
+    return {
+      ok: false,
+      error: 'Username must be 3–20 characters. Letters, numbers, spaces, and underscores only.',
+    }
   }
 
-  const { data: existing } = await sb
-    .from('profiles')
-    .select('id')
-    .eq('username', normalized)
-    .maybeSingle()
+  // Never send oversized data URLs to Postgres text columns.
+  const avatar =
+    avatarUrl && !(avatarUrl.startsWith('data:') && avatarUrl.length > 180_000)
+      ? avatarUrl
+      : null
 
-  if (existing) {
-    const avatar = avatarUrl.startsWith('data:') && avatarUrl.length > 120_000 ? null : avatarUrl || null
-    await sb
+  try {
+    const { data: existing, error: lookupError } = await sb
       .from('profiles')
-      .update({
-        display_name: displayName,
-        ...(avatar ? { avatar_url: avatar } : {}),
-      })
+      .select('id')
       .eq('username', normalized)
-    return { ok: true, userId: existing.id as string }
+      .maybeSingle()
+
+    if (lookupError) {
+      return { ok: false, error: lookupError.message, soft: true }
+    }
+
+    if (existing) {
+      await sb
+        .from('profiles')
+        .update({
+          display_name: displayName,
+          ...(avatar ? { avatar_url: avatar } : {}),
+        })
+        .eq('username', normalized)
+      return { ok: true, userId: existing.id as string }
+    }
+
+    const { data, error } = await sb
+      .from('profiles')
+      .insert({
+        username: normalized,
+        display_name: displayName,
+        avatar_url: avatar,
+      })
+      .select('id')
+      .single()
+
+    if (error) return { ok: false, error: error.message, soft: true }
+    return { ok: true, userId: data.id as string }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Network error'
+    return {
+      ok: false,
+      error: `Cloud unreachable (${message}). Saving on this device only.`,
+      soft: true,
+    }
   }
-
-  const { data, error } = await sb
-    .from('profiles')
-    .insert({
-      username: normalized,
-      display_name: displayName,
-      avatar_url: avatarUrl || null,
-    })
-    .select('id')
-    .single()
-
-  if (error) return { ok: false, error: error.message }
-  return { ok: true, userId: data.id as string }
 }
 
 export async function fetchCommunityFoods(): Promise<FoodItem[]> {

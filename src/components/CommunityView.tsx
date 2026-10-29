@@ -16,12 +16,16 @@ function parseInvite(input: string): string | null {
   try {
     const url = new URL(trimmed)
     const u = url.searchParams.get('u') ?? url.pathname.split('/').pop()
-    if (u) return u.replace('@', '').toLowerCase()
+    if (u) {
+      const decoded = decodeURIComponent(u).replace('@', '').trim().toLowerCase()
+      if (/^[a-z0-9_ ]{3,20}$/.test(decoded)) return decoded
+    }
   } catch {
     /* not a url */
   }
-  if (trimmed.startsWith('@')) return trimmed.slice(1).toLowerCase()
-  if (/^[a-z0-9_]{3,20}$/i.test(trimmed)) return trimmed.toLowerCase()
+  const handle = trimmed.startsWith('@') ? trimmed.slice(1) : trimmed
+  const normalized = handle.trim().replace(/\s+/g, ' ').toLowerCase()
+  if (/^[a-z0-9_ ]{3,20}$/.test(normalized)) return normalized
   return null
 }
 
@@ -44,8 +48,8 @@ export function CommunityView({ tracker, profile }: CommunityViewProps) {
 
   const inviteUrl =
     typeof window !== 'undefined'
-      ? `${window.location.origin}/app/community?u=${profile.username}`
-      : `https://ourcal.app/app/community?u=${profile.username}`
+      ? `${window.location.origin}/app/community?u=${encodeURIComponent(profile.username)}`
+      : `https://ourcal-pi.vercel.app/app/community?u=${encodeURIComponent(profile.username)}`
 
   const roomMessages = useMemo(
     () =>

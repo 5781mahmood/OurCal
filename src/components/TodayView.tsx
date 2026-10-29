@@ -176,8 +176,8 @@ export function TodayView({ tracker, profile }: TodayViewProps) {
                       <div>
                         <strong>{entry.name}</strong>
                         <span>
-                          {entry.servings}× · P {entry.protein}g · C {entry.carbs}g · F{' '}
-                          {entry.fat}g
+                          {entry.servings}× · Protein {entry.protein}g · Carbs {entry.carbs}g ·
+                          Fat {entry.fat}g
                         </span>
                       </div>
                       <div className="entry-actions">

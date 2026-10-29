@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import type { UserProfile } from '../types'
 import { ACTIVITY_LABELS } from '../lib/nutrition'
 import { BADGE_META } from '../lib/badges'
+import { compressImageFile } from '../lib/image'
 import { Onboarding } from './Onboarding'
 import type { TrackerApi } from '../hooks/useTracker'
 import { updateCloudAvatar } from '../lib/cloud'
@@ -53,20 +54,18 @@ export function ProfileView({ tracker, profile }: ProfileViewProps) {
 
   async function onAvatarPick(file: File | undefined) {
     if (!file) return
-    if (file.size > 800_000) {
-      setError('Use a photo under 800 KB.')
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => {
-      if (typeof reader.result !== 'string') return
-      updateAvatar(reader.result)
+    try {
+      const dataUrl = await compressImageFile(file)
+      updateAvatar(dataUrl)
       if (cloudEnabled) {
-        void updateCloudAvatar(profile.username, reader.result)
+        void updateCloudAvatar(profile.username, dataUrl)
       }
       setMessage('Profile photo updated.')
+      setError('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not use that photo.')
+      setMessage('')
     }
-    reader.readAsDataURL(file)
   }
 
   if (editing) {
@@ -100,15 +99,32 @@ export function ProfileView({ tracker, profile }: ProfileViewProps) {
           <h1>{profile.name}</h1>
           <p className="meta">@{profile.username}</p>
         </div>
-        <button type="button" className="btn-secondary" onClick={() => avatarRef.current?.click()}>
-          Change photo
-        </button>
+        <div className="btn-row">
+          <button type="button" className="btn-secondary" onClick={() => avatarRef.current?.click()}>
+            Change photo
+          </button>
+          {profile.avatarUrl ? (
+            <button
+              type="button"
+              className="btn-ghost danger"
+              onClick={() => {
+                updateAvatar('')
+                setMessage('Photo removed.')
+              }}
+            >
+              Remove photo
+            </button>
+          ) : null}
+        </div>
         <input
           ref={avatarRef}
           type="file"
           accept="image/jpeg,image/png,image/webp"
           hidden
-          onChange={(e) => void onAvatarPick(e.target.files?.[0])}
+          onChange={(e) => {
+            void onAvatarPick(e.target.files?.[0])
+            e.target.value = ''
+          }}
         />
       </header>
 
@@ -137,7 +153,7 @@ export function ProfileView({ tracker, profile }: ProfileViewProps) {
           <div>
             <dt>Macros</dt>
             <dd>
-              P {profile.macroGoals.protein}g · C {profile.macroGoals.carbs}g · F{' '}
+              Protein {profile.macroGoals.protein}g · Carbs {profile.macroGoals.carbs}g · Fat{' '}
               {profile.macroGoals.fat}g
             </dd>
           </div>
