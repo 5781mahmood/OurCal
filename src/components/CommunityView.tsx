@@ -128,7 +128,7 @@ export function CommunityView({ tracker, profile }: CommunityViewProps) {
     }
   }, [])
 
-  function startDm(friendUsername: string) {
+  async function startDm(friendUsername: string) {
     const existing = state.chatRooms.find(
       (r) =>
         r.title === `@${friendUsername}` &&
@@ -138,19 +138,19 @@ export function CommunityView({ tracker, profile }: CommunityViewProps) {
       setActiveRoom(existing.id)
       return
     }
-    const room = createChatRoom(`@${friendUsername}`, [
+    const room = await createChatRoom(`@${friendUsername}`, [
       profile.username,
       friendUsername,
     ])
     setActiveRoom(room.id)
   }
 
-  function startGroupChat() {
+  async function startGroupChat() {
     const members = [
       profile.username,
       ...state.friends.slice(0, 4).map((f) => f.username),
     ]
-    const room = createChatRoom('Group check-in', members)
+    const room = await createChatRoom('Group check-in', members)
     setActiveRoom(room.id)
   }
 
@@ -223,7 +223,7 @@ export function CommunityView({ tracker, profile }: CommunityViewProps) {
                     <p className="meta">@{f.username}</p>
                   </div>
                   <div className="friend-actions">
-                    <button type="button" className="btn-secondary" onClick={() => startDm(f.username)}>
+                    <button type="button" className="btn-secondary" onClick={() => void startDm(f.username)}>
                       Message
                     </button>
                     <button
@@ -244,7 +244,7 @@ export function CommunityView({ tracker, profile }: CommunityViewProps) {
       <section className="panel chat-panel">
         <header className="chat-head">
           <h2>Chat</h2>
-          <button type="button" className="btn-secondary" onClick={startGroupChat}>
+          <button type="button" className="btn-secondary" onClick={() => void startGroupChat()}>
             New group thread
           </button>
         </header>

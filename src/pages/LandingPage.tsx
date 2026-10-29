@@ -37,7 +37,27 @@ export function LandingPage() {
             </p>
           </div>
           <figure className="editorial-figure">
-            <div className="figure-frame diary-preview" aria-hidden />
+            <div className="product-sheet" aria-hidden>
+              <header>
+                <span>Thursday</span>
+                <strong>1,842 / 2,200</strong>
+              </header>
+              <ol className="sheet-streak">
+                <li className="on">M</li>
+                <li className="on">T</li>
+                <li className="on">W</li>
+                <li className="on">T</li>
+                <li>F</li>
+                <li>S</li>
+                <li>S</li>
+              </ol>
+              <p className="sheet-score">Balance index 86</p>
+              <ul>
+                <li><span>Protein 128g</span><i className="macro-high" /></li>
+                <li><span>Carbs 164g</span><i className="macro-mid" /></li>
+                <li><span>Fat 48g</span><i className="macro-low" /></li>
+              </ul>
+            </div>
             <figcaption>Today view with macro traffic lights and streak week.</figcaption>
           </figure>
         </section>
@@ -52,7 +72,14 @@ export function LandingPage() {
             </p>
           </div>
           <figure className="editorial-figure">
-            <div className="figure-frame balance-preview" aria-hidden />
+            <div className="product-sheet" aria-hidden>
+              <p className="sheet-score">86</p>
+              <p>Calories within 8% of goal. Protein above target. Fat still low.</p>
+              <ul>
+                <li>Share this score in a private thread.</li>
+                <li>Badges unlock at 3, 7, 14, and 30 days.</li>
+              </ul>
+            </div>
             <figcaption>One score from calories plus protein, carbs, and fat.</figcaption>
           </figure>
         </section>
@@ -67,7 +94,17 @@ export function LandingPage() {
             </p>
           </div>
           <figure className="editorial-figure">
-            <div className="figure-frame chat-preview" aria-hidden />
+            <div className="product-sheet" aria-hidden>
+              <header>
+                <span>@alex</span>
+                <strong>Thread</strong>
+              </header>
+              <ul>
+                <li>Logged lunch. Balance index 86.</li>
+                <li>On a 4-day streak.</li>
+                <li>Invite with QR or @username.</li>
+              </ul>
+            </div>
             <figcaption>Private threads instead of public group feeds.</figcaption>
           </figure>
         </section>

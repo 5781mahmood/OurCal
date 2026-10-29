@@ -20,14 +20,36 @@ import { sumMacros } from '../lib/nutrition'
 import { lastNDateKeys, todayKey } from '../lib/dates'
 import { evaluateBadges } from '../lib/badges'
 import {
+  clearDiaryDay,
+  createCloudRoom,
+  deleteFriendship,
   fetchCommunityFoods,
+  fetchDiary,
+  fetchFriends,
+  fetchMessages,
+  fetchRooms,
   isCloudEnabled,
   publishSharedFood,
+  pushDiaryEntry,
   registerUsername,
+  removeDiaryEntry,
+  saveFriendship,
+  sendCloudMessage,
+  subscribeMessages,
 } from '../lib/cloud'
 
 function uid(): string {
   return crypto.randomUUID()
+}
+
+function mergeById<T extends { id: string }>(local: T[], remote: T[]): T[] {
+  const seen = new Set(local.map((item) => item.id))
+  return [...local, ...remote.filter((item) => !seen.has(item.id))]
+}
+
+function mergeByUsername(local: FriendLink[], remote: FriendLink[]): FriendLink[] {
+  const seen = new Set(local.map((item) => item.username))
+  return [...local, ...remote.filter((item) => !seen.has(item.username))]
 }
 
 export function useTracker() {
@@ -48,6 +70,52 @@ export function useTracker() {
     }, 60_000)
     return () => window.clearInterval(interval)
   }, [])
+
+  const cloudUsername = state.profile?.username
+
+  useEffect(() => {
+    if (!cloudUsername || !isCloudEnabled()) return
+    let cancel = false
+    void (async () => {
+      const [remoteEntries, remoteFriends, remoteRooms] = await Promise.all([
+        fetchDiary(cloudUsername),
+        fetchFriends(cloudUsername),
+        fetchRooms(cloudUsername),
+      ])
+      const remoteMessages = (
+        await Promise.all(remoteRooms.map((room) => fetchMessages(room.id)))
+      ).flat()
+      if (cancel) return
+      setState((s) => {
+        if (s.profile?.username !== cloudUsername) return s
+        const entries = mergeById(s.entries, remoteEntries)
+        const friends = mergeByUsername(s.friends, remoteFriends)
+        const chatRooms = mergeById(s.chatRooms, remoteRooms)
+        const chatMessages = mergeById(s.chatMessages, remoteMessages)
+        return { ...s, entries, friends, chatRooms, chatMessages }
+      })
+    })()
+    return () => {
+      cancel = true
+    }
+  }, [cloudUsername])
+
+  const roomKey = state.chatRooms.map((room) => room.id).join('|')
+
+  useEffect(() => {
+    if (!isCloudEnabled() || !roomKey) return
+    const stops = state.chatRooms.map((room) =>
+      subscribeMessages(room.id, (message) => {
+        setState((s) => {
+          if (s.chatMessages.some((item) => item.id === message.id)) return s
+          return { ...s, chatMessages: [...s.chatMessages, message] }
+        })
+      }),
+    )
+    return () => {
+      for (const stop of stops) stop()
+    }
+  }, [roomKey])
 
   const streak = useMemo(() => {
     let count = 0
@@ -137,9 +205,10 @@ export function useTracker() {
         createdAt: new Date().toISOString(),
       }
       setState((s) => ({ ...s, entries: [...s.entries, entry] }))
+      if (state.profile) void pushDiaryEntry(state.profile.username, entry)
       setStatusMessage(`${input.name} logged.`)
     },
-    [selectedDate],
+    [selectedDate, state.profile],
   )
 
   const deleteEntry = useCallback((id: string) => {
@@ -147,6 +216,7 @@ export function useTracker() {
       ...s,
       entries: s.entries.filter((e) => e.id !== id),
     }))
+    void removeDiaryEntry(id)
     setStatusMessage('Entry removed.')
   }, [])
 
@@ -182,8 +252,9 @@ export function useTracker() {
       ...s,
       entries: s.entries.filter((e) => e.date !== selectedDate),
     }))
+    if (state.profile) void clearDiaryDay(state.profile.username, selectedDate)
     setStatusMessage('All food cleared for this day.')
-  }, [selectedDate])
+  }, [selectedDate, state.profile])
 
   const resetAll = useCallback(() => {
     setState(emptyState())
@@ -215,47 +286,65 @@ export function useTracker() {
     }))
   }, [state.entries])
 
-  const addFriend = useCallback((friend: FriendLink) => {
-    setState((s) => {
-      if (s.friends.some((f) => f.username === friend.username)) return s
-      return { ...s, friends: [friend, ...s.friends] }
-    })
-    setStatusMessage(`Added @${friend.username}.`)
-  }, [])
+  const addFriend = useCallback(
+    (friend: FriendLink) => {
+      setState((s) => {
+        if (s.friends.some((f) => f.username === friend.username)) return s
+        return { ...s, friends: [friend, ...s.friends] }
+      })
+      if (state.profile) void saveFriendship(state.profile.username, friend)
+      setStatusMessage(`Added @${friend.username}.`)
+    },
+    [state.profile],
+  )
 
-  const removeFriend = useCallback((username: string) => {
-    setState((s) => ({
-      ...s,
-      friends: s.friends.filter((f) => f.username !== username),
-    }))
-  }, [])
+  const removeFriend = useCallback(
+    (username: string) => {
+      setState((s) => ({
+        ...s,
+        friends: s.friends.filter((f) => f.username !== username),
+      }))
+      if (state.profile) void deleteFriendship(state.profile.username, username)
+    },
+    [state.profile],
+  )
 
-  const createChatRoom = useCallback((title: string, members: string[]) => {
-    const room: ChatRoom = {
+  const createChatRoom = useCallback(async (title: string, members: string[]) => {
+    const remote = isCloudEnabled() ? await createCloudRoom(title, members) : null
+    const room: ChatRoom = remote ?? {
       id: uid(),
       title,
       memberUsernames: members,
       createdAt: new Date().toISOString(),
     }
-    setState((s) => ({ ...s, chatRooms: [room, ...s.chatRooms] }))
+    setState((s) => ({
+      ...s,
+      chatRooms: s.chatRooms.some((item) => item.id === room.id)
+        ? s.chatRooms
+        : [room, ...s.chatRooms],
+    }))
     return room
   }, [])
 
   const sendChatMessage = useCallback(
-    (roomId: string, body: string) => {
+    async (roomId: string, body: string) => {
       if (!state.profile || !body.trim()) return
-      const msg: ChatMessage = {
-        id: uid(),
+      const draft = {
         roomId,
         authorUsername: state.profile.username,
         authorName: state.profile.name,
         body: body.trim(),
+      }
+      const remote = isCloudEnabled() ? await sendCloudMessage(draft) : null
+      const msg: ChatMessage = remote ?? {
+        ...draft,
+        id: uid(),
         createdAt: new Date().toISOString(),
       }
-      setState((s) => ({
-        ...s,
-        chatMessages: [...s.chatMessages, msg],
-      }))
+      setState((s) => {
+        if (s.chatMessages.some((item) => item.id === msg.id)) return s
+        return { ...s, chatMessages: [...s.chatMessages, msg] }
+      })
     },
     [state.profile],
   )
