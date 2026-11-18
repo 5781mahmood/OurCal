@@ -1,32 +1,87 @@
 # OurCal
 
-Calorie and macro diary for the web. Local-first in the browser, with optional Supabase sync for global usernames, shared custom foods, friendships, diary rows, and realtime chat.
+Local-first calorie and macro diary for the browser, with optional Supabase sync for friends and chat.
 
-**Live:** [https://ourcal-pi.vercel.app](https://ourcal-pi.vercel.app)  
-**Repo:** [https://github.com/5781mahmood/OurCal](https://github.com/5781mahmood/OurCal)
+**Live:** [https://ourcal-pi.vercel.app](https://ourcal-pi.vercel.app)
 
-## Stack
+[![E2E](https://github.com/5781mahmood/OurCal/actions/workflows/e2e.yml/badge.svg)](https://github.com/5781mahmood/OurCal/actions/workflows/e2e.yml)
 
-- **React 19 + TypeScript + Vite** — SPA UI and typed domain models
-- **React Router** — marketing site (`/`), app (`/app`), custom 404
-- **Supabase (Postgres)** — optional cloud for profiles, foods, friends, chat, diary
-- **localStorage** — offline diary that still works without cloud keys
-- **Recharts** — weekly bars and macro pie (lazy-loaded)
-- **qrcode.react + html5-qrcode** — invite QR generate and scan (lazy-loaded People tab)
-- **Vercel** — GitHub `main` auto-deploys; `vercel.json` SPA rewrites
-- **Vitest** — unit tests for nutrition, balance, macros, streak, badges
+Screenshots use a fictional profile seeded in the browser (`scripts/capture-screenshots.mjs`). They are not a real account.
+
+![Today diary](docs/screenshots/today.png)
+
+![Stats](docs/screenshots/stats.png)
+
+![People](docs/screenshots/people.png)
 
 ## Features
 
-- Onboarding with Mifflin–St Jeor TDEE, macros, global username, profile photo
-- Daily diary (Breakfast / Lunch / Dinner / Snack) + 270+ food catalog + custom foods
-- **Balance index** (0–100) from calorie + macro adherence
-- Macro traffic lights (red / orange / green vs goal)
-- Streak week with today marker and fill animations
-- Badges for streaks, first log, balance 80+, friends, shared foods
-- Friends via username, invite link (`?u=`), or QR
-- DM / group chat with Supabase Realtime when cloud is configured
-- Export / import JSON backup
+- Onboarding estimates a daily calorie target (Mifflin–St Jeor) and protein, carb, and fat goals
+- Diary for Breakfast, Lunch, Dinner, and Snack, with search, custom foods, and a servings stepper
+- Calorie ring, balance index, and macro levels (Low, On track, High, Over)
+- Streak and badges
+- Stats for the last 7 days, today vs goal, and today by meal, including empty states
+- Friends via username, invite link (`/app?u=`), or QR, plus direct and small group chat
+- Profile editing, photo, JSON export and import
+- Diary stays in `localStorage` when cloud keys are absent
+
+## Tech stack
+
+- React 19, TypeScript, Vite
+- React Router
+- Supabase (optional Postgres + Realtime)
+- Recharts
+- qrcode.react and html5-qrcode
+- Vitest and Playwright
+- Vercel (deploys from `main`)
+
+## Testing
+
+Vitest covers nutrition, balance index, macro levels, streak, and badges. Playwright drives Chromium against the Vite app (`playwright.config.ts` starts the dev server).
+
+| Area | What the specs check |
+|------|----------------|
+| Onboarding | Calorie goal appears; name required; Start tracking opens Today; Protein / Carbs / Fat labels |
+| Diary | Logging updates the ring; delete clears it; servings stepper; day navigation and Jump to today; clear-day confirm and cancel; empty search; custom food |
+| Routing | Landing call to action; custom 404; invite `?u=` opens People |
+| People | QR and copy invite (`/app?u=`); no group with zero friends; cannot add yourself; chat Send stays disabled until there is text |
+| Stats / Profile | Empty week copy; chart after a log; macro columns; Cancel edit; JSON download |
+| Persistence | Reload keeps the diary; export, wipe, and import restores meals |
+| Macros / balance | Level words; protein line after chicken; meal kcal header |
+| Accessibility smoke | Nav by role; Escape closes the add-food dialog; ring `aria-label` |
+| Edge cases | Short username; invalid friend input; Log food disabled until a food is selected; next day; reset |
+
+```bash
+npm test
+npm run test:e2e
+```
+
+Latest local run: Vitest **12 passed** (5 files). Playwright **40 passed**.
+
+Headed and UI modes: `npm run test:e2e:headed`, `npm run test:e2e:ui`.
+
+GitHub Actions (`.github/workflows/e2e.yml`) runs the unit tests and Playwright on every push and pull request to `main`.
+
+## Architecture
+
+| Path | Purpose |
+|------|---------|
+| `src/types.ts` | Domain models |
+| `src/lib/nutrition.ts` | BMR, TDEE, macro goals |
+| `src/lib/balanceIndex.ts` | Balance score |
+| `src/lib/macroLevel.ts` | Macro level, including over goal |
+| `src/lib/streak.ts` | Logging streak |
+| `src/lib/badges.ts` | Achievements |
+| `src/lib/cloud.ts` | Supabase client and sync |
+| `src/lib/storage.ts` | localStorage, export, import |
+| `src/lib/invite.ts` | Invite URL `/app?u=` |
+| `src/hooks/useTracker.ts` | App state |
+| `src/components/*` | Today, Stats, People, Profile, onboarding |
+| `src/pages/*` | Landing and 404 |
+| `src/data/` | Bundled food catalog |
+| `e2e/` | Playwright specs and helpers |
+| `supabase/*.sql` | Postgres tables, RLS, realtime |
+| `scripts/capture-screenshots.mjs` | Demo screenshots for this README |
 
 ## Run locally
 
@@ -35,104 +90,23 @@ npm install
 npm run dev
 ```
 
+`npm install` runs `postinstall`, which downloads Chromium for Playwright (`npx playwright install chromium`).
+
 ```bash
 npm run build
-npm test
-npm run lint
-npm run test:e2e
 ```
 
-First time only (downloads Chromium for Playwright):
+## Supabase (optional)
 
-```bash
-npx playwright install chromium
-```
+1. Create a project at [supabase.com](https://supabase.com).
+2. In the SQL editor, run `supabase/schema.sql`, then `supabase/social.sql`.
+3. Copy the project URL and the anon public key (not `service_role`).
+4. On Vercel, set these as Config variables, then redeploy. Vite reads them at build time:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
 
-## Testing
+Without those keys the diary still works on one device. Placeholder values `0` and `1` are ignored.
 
-**Unit (Vitest)** — pure domain logic with no browser: nutrition / TDEE, balance index, macro levels, streak, badges. Fast feedback while editing formulas.
+## Known limits
 
-**End-to-end (Playwright)** — drives a real Chromium against the Vite app (`playwright.config.ts` starts `npm run dev` for you). Specs live in `e2e/`:
-
-| Area | What we assert |
-|------|----------------|
-| Onboarding | Calorie goal appears; name required; Start tracking → Today; macro labels |
-| Diary | Log food updates ring; delete clears it; servings stepper; day nav + Jump to today; clear-day confirm/cancel; empty search; custom food |
-| Routing | Landing CTA; custom 404; invite `?u=` opens People |
-| People | QR + copy invite (`/app?u=`); no solo groups; self-add error; chat Send disabled until typed |
-| Stats / Profile | Empty week copy; chart after log; macro columns; Cancel edit; JSON export download |
-| Persistence | Reload keeps diary; export → wipe → import restores meals |
-| Macros / balance | Level words; protein bar after chicken; meal kcal header |
-| A11y smoke | Nav by role; Escape closes modal; ring `aria-label` |
-| Edge cases | Short username; bad friend input; Log food disabled until select; next day; reset |
-
-One-time browser download (also runs via `postinstall` after `npm install`):
-
-```bash
-npx playwright install chromium
-```
-
-Run commands **one at a time** (do not paste comments on the same line):
-
-```bash
-npm run test:e2e
-npm run test:e2e:headed
-npm run test:e2e:ui
-npm run test:e2e -- e2e/diary.spec.ts
-```
-
-| Script | What you see |
-|--------|----------------|
-| `test:e2e` | Headless Chromium (fast, CI-style) |
-| `test:e2e:headed` | Real browser windows so you can watch clicks |
-| `test:e2e:ui` | Playwright’s interactive UI mode |
-
-GitHub Actions (`.github/workflows/e2e.yml`) runs unit + Playwright on every push/PR to `main`.
-
-## Supabase setup (cloud features)
-
-1. Create a free project at [supabase.com](https://supabase.com).
-2. In **SQL Editor**, run [`supabase/schema.sql`](supabase/schema.sql), then [`supabase/social.sql`](supabase/social.sql).
-3. Copy **Project URL** and **anon public** key (not `service_role`).
-4. In Vercel → Project → Environment Variables, add as **Config** (plain), not Secret:
-   - `VITE_SUPABASE_URL` = `https://YOUR_PROJECT.supabase.co`
-   - `VITE_SUPABASE_ANON_KEY` = long `eyJ…` string
-5. Redeploy. Vite only reads these at **build** time.
-
-Without keys, the app stays fully usable on one device. Placeholders like `0` / `1` are ignored.
-
-**Demo security note:** RLS policies are open for class/demo multi-user use. Production hardening would add Supabase Auth and per-user policies.
-
-## Deploy
-
-Push to `main` on GitHub. Vercel rebuilds automatically.
-
-```bash
-git add -A
-git commit -m "Describe your change"
-git push origin main
-```
-
-## Project map
-
-| Path | Purpose |
-|------|---------|
-| `src/types.ts` | Domain models |
-| `src/lib/nutrition.ts` | BMR / TDEE / macros |
-| `src/lib/balanceIndex.ts` | Balance score |
-| `src/lib/streak.ts` | Logging streak |
-| `src/lib/badges.ts` | Achievements |
-| `src/lib/cloud.ts` | Supabase client + sync |
-| `src/lib/storage.ts` | localStorage + export/import |
-| `src/hooks/useTracker.ts` | App state |
-| `src/components/*` | Today, Stats, People, Profile, streak UI |
-| `src/pages/*` | Landing + 404 |
-| `supabase/*.sql` | Postgres tables + RLS + realtime |
-
-## What this project demonstrates
-
-- Domain logic separated from UI
-- Local-first design with optional cloud catch-up sync
-- SPA routing, SEO meta, Vercel SPA rewrites
-- Realtime chat via Supabase publications
-- Editorial UI without template “AI slop” patterns
+Supabase row-level security in this repo is demo-open so more than one browser can share foods, friends, and chat in a class setting. A production deployment needs Supabase Auth and per-user policies. There is no USDA bulk import and no dedicated avatar storage bucket.
