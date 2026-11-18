@@ -1,10 +1,20 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js'
 import type { ChatMessage, ChatRoom, DiaryEntry, FoodItem, FriendLink } from '../types'
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
 let client: SupabaseClient | null = null
+
+export type AuthUser = { id: string; email: string }
+
+let currentUser: AuthUser | null = null
+const authListeners = new Set<(user: AuthUser | null) => void>()
+
+function toAuthUser(session: Session | null): AuthUser | null {
+  if (!session?.user) return null
+  return { id: session.user.id, email: session.user.email ?? '' }
+}
 
 function looksConfigured(value: string | undefined, kind: 'url' | 'key'): boolean {
   if (!value) return false
@@ -20,17 +30,83 @@ export function isCloudEnabled(): boolean {
 
 export function getSupabase(): SupabaseClient | null {
   if (!isCloudEnabled()) return null
-  if (!client) client = createClient(url!, anon!)
+  if (!client) {
+    client = createClient(url!, anon!)
+    // Fires INITIAL_SESSION on load (including a session parsed from a magic
+    // link redirect), then SIGNED_IN / SIGNED_OUT / TOKEN_REFRESHED.
+    client.auth.onAuthStateChange((_event, session) => {
+      const next = toAuthUser(session)
+      if (next?.id === currentUser?.id && next?.email === currentUser?.email) return
+      currentUser = next
+      for (const listener of authListeners) listener(currentUser)
+    })
+  }
   return client
 }
 
-export async function registerUsername(
+export function getAuthUser(): AuthUser | null {
+  return currentUser
+}
+
+/** Cloud reads/writes of private data need keys and a signed-in session. */
+export function isCloudReady(): boolean {
+  return isCloudEnabled() && currentUser !== null
+}
+
+export function onAuthChange(listener: (user: AuthUser | null) => void): () => void {
+  getSupabase()
+  authListeners.add(listener)
+  listener(currentUser)
+  return () => {
+    authListeners.delete(listener)
+  }
+}
+
+export async function sendMagicLink(email: string): Promise<{ ok: boolean; error?: string }> {
+  const sb = getSupabase()
+  if (!sb) return { ok: false, error: 'Cloud sync is not configured on this deployment.' }
+  const trimmed = email.trim()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    return { ok: false, error: 'Enter a valid email address.' }
+  }
+  try {
+    const { error } = await sb.auth.signInWithOtp({
+      email: trimmed,
+      options: { emailRedirectTo: `${window.location.origin}/app` },
+    })
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Network error'
+    return { ok: false, error: `Could not send the sign-in link (${message}).` }
+  }
+}
+
+export async function signOutCloud(): Promise<void> {
+  const sb = getSupabase()
+  if (!sb) return
+  await sb.auth.signOut()
+}
+
+/**
+ * Link the local profile to the signed-in account. Usernames are permanent
+ * once claimed (enforced in SQL), so an existing claim wins over local edits.
+ */
+export async function claimProfile(
   username: string,
   displayName: string,
   avatarUrl: string,
-): Promise<{ ok: boolean; error?: string; userId?: string; soft?: boolean }> {
+): Promise<{
+  ok: boolean
+  error?: string
+  userId?: string
+  soft?: boolean
+  cloudUsername?: string
+}> {
   const sb = getSupabase()
   if (!sb) return { ok: false, error: 'Cloud sync is not configured on this deployment.', soft: true }
+  const user = currentUser
+  if (!user) return { ok: false, error: 'Sign in from Profile to sync across devices.', soft: true }
 
   const normalized = username.trim().replace(/\s+/g, ' ').toLowerCase()
   if (!/^[a-z0-9_ ]{3,20}$/.test(normalized)) {
@@ -47,24 +123,23 @@ export async function registerUsername(
       : null
 
   try {
-    const { data: existing, error: lookupError } = await sb
+    const { data: mine, error: lookupError } = await sb
       .from('profiles')
-      .select('id')
-      .eq('username', normalized)
+      .select('id, username')
+      .eq('user_id', user.id)
       .maybeSingle()
 
     if (lookupError) {
       return { ok: false, error: lookupError.message, soft: true }
     }
 
-    if (existing) {
-      // Never overwrite someone else's profile from another device/session.
-      return {
-        ok: false,
-        error: 'That username is already taken in the cloud. Using this device only.',
-        soft: true,
-        userId: existing.id as string,
-      }
+    if (mine) {
+      const { error } = await sb
+        .from('profiles')
+        .update({ display_name: displayName, avatar_url: avatar })
+        .eq('user_id', user.id)
+      if (error) return { ok: false, error: error.message, soft: true }
+      return { ok: true, userId: mine.id as string, cloudUsername: mine.username as string }
     }
 
     const { data, error } = await sb
@@ -77,8 +152,18 @@ export async function registerUsername(
       .select('id')
       .single()
 
-    if (error) return { ok: false, error: error.message, soft: true }
-    return { ok: true, userId: data.id as string }
+    if (error) {
+      // 23505 = unique_violation: another account already owns this username.
+      if (error.code === '23505') {
+        return {
+          ok: false,
+          error: 'That username is already taken in the cloud. Pick another in Edit profile.',
+          soft: true,
+        }
+      }
+      return { ok: false, error: error.message, soft: true }
+    }
+    return { ok: true, userId: data.id as string, cloudUsername: normalized }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Network error'
     return {
@@ -140,14 +225,10 @@ export async function lookupProfileByUsername(
   username: string,
 ): Promise<{ username: string; displayName: string; avatarUrl: string } | null> {
   const sb = getSupabase()
-  if (!sb) return null
+  if (!sb || !currentUser) return null
 
-  const { data } = await sb
-    .from('profiles')
-    .select('username, display_name, avatar_url')
-    .eq('username', username.trim().toLowerCase())
-    .maybeSingle()
-
+  const { data: rows } = await sb.rpc('lookup_profile', { p_username: username })
+  const data = (rows as Record<string, unknown>[] | null)?.[0]
   if (!data) return null
   return {
     username: data.username as string,
@@ -156,14 +237,12 @@ export async function lookupProfileByUsername(
   }
 }
 
-export async function updateCloudAvatar(
-  username: string,
-  avatarUrl: string,
-): Promise<{ ok: boolean; error?: string }> {
+export async function updateCloudAvatar(avatarUrl: string): Promise<{ ok: boolean; error?: string }> {
   const sb = getSupabase()
   if (!sb) return { ok: false, error: 'Cloud sync is not configured.' }
+  if (!currentUser) return { ok: false, error: 'Sign in to sync your photo.' }
 
-  // Empty string clears the cloud avatar. Align size cap with registerUsername.
+  // Empty string clears the cloud avatar. Align size cap with claimProfile.
   if (avatarUrl.startsWith('data:') && avatarUrl.length > 180_000) {
     return {
       ok: false,
@@ -174,19 +253,19 @@ export async function updateCloudAvatar(
   const { error } = await sb
     .from('profiles')
     .update({ avatar_url: avatarUrl || null })
-    .eq('username', username)
+    .eq('user_id', currentUser.id)
 
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function fetchFriends(ownerUsername: string): Promise<FriendLink[]> {
+export async function fetchFriends(): Promise<FriendLink[]> {
   const sb = getSupabase()
-  if (!sb) return []
+  if (!sb || !currentUser) return []
   const { data } = await sb
     .from('friendships')
     .select('*')
-    .eq('owner_username', ownerUsername)
+    .eq('owner_id', currentUser.id)
     .order('created_at', { ascending: false })
   return (data ?? []).map((row) => ({
     username: row.friend_username as string,
@@ -216,15 +295,15 @@ export async function saveFriendship(
 }
 
 export async function deleteFriendship(
-  ownerUsername: string,
   friendUsername: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const sb = getSupabase()
   if (!sb) return { ok: false, error: 'Cloud sync is not configured.' }
+  if (!currentUser) return { ok: false, error: 'Sign in to sync friends.' }
   const { error } = await sb
     .from('friendships')
     .delete()
-    .eq('owner_username', ownerUsername)
+    .eq('owner_id', currentUser.id)
     .eq('friend_username', friendUsername)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
@@ -392,28 +471,26 @@ export async function removeDiaryEntry(id: string): Promise<{ ok: boolean; error
   return { ok: true }
 }
 
-export async function clearDiaryDay(
-  username: string,
-  date: string,
-): Promise<{ ok: boolean; error?: string }> {
+export async function clearDiaryDay(date: string): Promise<{ ok: boolean; error?: string }> {
   const sb = getSupabase()
   if (!sb) return { ok: false, error: 'Cloud sync is not configured.' }
+  if (!currentUser) return { ok: false, error: 'Sign in to sync your diary.' }
   const { error } = await sb
     .from('diary_entries')
     .delete()
-    .eq('username', username)
+    .eq('user_id', currentUser.id)
     .eq('entry_date', date)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function fetchDiary(username: string): Promise<DiaryEntry[]> {
+export async function fetchDiary(): Promise<DiaryEntry[]> {
   const sb = getSupabase()
-  if (!sb) return []
+  if (!sb || !currentUser) return []
   const { data } = await sb
     .from('diary_entries')
     .select('*')
-    .eq('username', username)
+    .eq('user_id', currentUser.id)
     .order('created_at', { ascending: true })
   return (data ?? []).map((row) => ({
     id: row.id as string,

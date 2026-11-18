@@ -1,4 +1,5 @@
 -- Run in Supabase SQL editor for global usernames, shared foods, and avatars.
+-- Tables only. Access rules live in auth_rls.sql (run social.sql, then auth_rls.sql).
 
 create table if not exists public.profiles (
   id uuid primary key default gen_random_uuid(),
@@ -23,10 +24,3 @@ create table if not exists public.shared_foods (
 
 alter table public.profiles enable row level security;
 alter table public.shared_foods enable row level security;
-
-create policy "profiles read" on public.profiles for select using (true);
-create policy "profiles insert" on public.profiles for insert with check (true);
-create policy "profiles update" on public.profiles for update using (true);
-
-create policy "foods read" on public.shared_foods for select using (true);
-create policy "foods insert" on public.shared_foods for insert with check (true);

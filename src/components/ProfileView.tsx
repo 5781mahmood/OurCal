@@ -21,10 +21,18 @@ export function ProfileView({ tracker, profile }: ProfileViewProps) {
     updateAvatar,
     state,
     cloudEnabled,
+    cloudConfigured,
+    authEmail,
+    requestSignInLink,
+    signOut,
   } = tracker
   const [editing, setEditing] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [email, setEmail] = useState('')
+  const [authNote, setAuthNote] = useState('')
+  const [authError, setAuthError] = useState('')
+  const [sending, setSending] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const avatarRef = useRef<HTMLInputElement>(null)
 
@@ -52,13 +60,27 @@ export function ProfileView({ tracker, profile }: ProfileViewProps) {
     }
   }
 
+  async function onSendLink(e: React.FormEvent) {
+    e.preventDefault()
+    setAuthError('')
+    setAuthNote('')
+    setSending(true)
+    const result = await requestSignInLink(email)
+    setSending(false)
+    if (!result.ok) {
+      setAuthError(result.error ?? 'Could not send the sign-in link.')
+      return
+    }
+    setAuthNote(`Check ${email.trim()} for a sign-in link. Open it in this browser.`)
+  }
+
   async function onAvatarPick(file: File | undefined) {
     if (!file) return
     try {
       const dataUrl = await compressImageFile(file)
       updateAvatar(dataUrl)
       if (cloudEnabled) {
-        const cloud = await updateCloudAvatar(profile.username, dataUrl)
+        const cloud = await updateCloudAvatar(dataUrl)
         if (!cloud.ok) setError(cloud.error ?? 'Could not sync photo.')
       }
       setMessage('Profile photo updated.')
@@ -72,7 +94,7 @@ export function ProfileView({ tracker, profile }: ProfileViewProps) {
   async function removePhoto() {
     updateAvatar('')
     if (cloudEnabled) {
-      const cloud = await updateCloudAvatar(profile.username, '')
+      const cloud = await updateCloudAvatar('')
       if (!cloud.ok) {
         setError(cloud.error ?? 'Could not clear cloud photo.')
         return
@@ -114,7 +136,11 @@ export function ProfileView({ tracker, profile }: ProfileViewProps) {
           <h1>{profile.name}</h1>
           <p className="meta">@{profile.username}</p>
           <p className="meta cloud-status">
-            {cloudEnabled ? 'Synced' : 'This device only'}
+            {cloudEnabled
+              ? 'Synced'
+              : cloudConfigured
+                ? 'Signed out · this device only'
+                : 'This device only'}
           </p>
         </div>
         <div className="btn-row">
@@ -205,11 +231,52 @@ export function ProfileView({ tracker, profile }: ProfileViewProps) {
         </button>
       </section>
 
+      <section className="profile-card" aria-labelledby="cloud-account-heading">
+        <h2 id="cloud-account-heading">Cloud account</h2>
+        {!cloudConfigured ? (
+          <p className="lede tight">
+            Cloud sync isn't set up on this deployment, so everything stays in this
+            browser. No account needed.
+          </p>
+        ) : authEmail ? (
+          <>
+            <p className="lede tight">
+              Signed in as <strong>{authEmail}</strong>. Your diary, friends and chats
+              sync, and only you can read your diary.
+            </p>
+            <button type="button" className="btn-secondary" onClick={() => void signOut()}>
+              Sign out
+            </button>
+          </>
+        ) : (
+          <form onSubmit={(e) => void onSendLink(e)} noValidate>
+            <p className="lede tight">
+              Sign in with a one-time email link to sync across devices. No password.
+              Until then, everything stays on this device.
+            </p>
+            <label className="field">
+              Email
+              <input
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </label>
+            <button type="submit" className="btn-primary" disabled={sending}>
+              {sending ? 'Sending…' : 'Email me a sign-in link'}
+            </button>
+            {authNote ? <p className="toast inline success">{authNote}</p> : null}
+            {authError ? <p className="form-error">{authError}</p> : null}
+          </form>
+        )}
+      </section>
+
       <section className="profile-card">
         <h2>Your data</h2>
         <p className="lede tight">
-          Diary data stays in this browser. Export before clearing site data. Connect
-          Supabase env vars on Vercel to sync usernames, avatars, and shared foods.
+          A copy of your diary always stays in this browser. Export before clearing
+          site data.
         </p>
         <div className="btn-row">
           <button type="button" className="btn-primary" onClick={downloadExport}>
