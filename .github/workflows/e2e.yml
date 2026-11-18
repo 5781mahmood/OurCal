@@ -33,6 +33,10 @@ jobs:
         run: npm run test:e2e
         env:
           CI: true
+          # Optional. When unset, e2e/auth-live.spec.ts reports "skipped".
+          SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
+          SUPABASE_TEST_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
+          SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
 
       - name: Upload Playwright report on failure
         if: failure()

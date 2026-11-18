@@ -21,6 +21,7 @@ import { lastNDateKeys, todayKey } from '../lib/dates'
 import { evaluateBadges } from '../lib/badges'
 import { computeStreak } from '../lib/streak'
 import {
+  claimProfile,
   clearDiaryDay,
   createCloudRoom,
   deleteFriendship,
@@ -30,14 +31,18 @@ import {
   fetchMessages,
   fetchRooms,
   isCloudEnabled,
+  isCloudReady,
+  onAuthChange,
   publishSharedFood,
   pushCloudRoom,
   pushDiaryEntry,
-  registerUsername,
   removeDiaryEntry,
   saveFriendship,
   sendCloudMessage,
+  sendMagicLink,
+  signOutCloud,
   subscribeMessages,
+  type AuthUser,
 } from '../lib/cloud'
 
 function uid(): string {
@@ -65,10 +70,19 @@ export function useTracker() {
   const [communityFoods, setCommunityFoods] = useState<FoodItem[]>([])
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null)
 
   useEffect(() => {
     saveState(state)
   }, [state])
+
+  useEffect(() => {
+    if (!isCloudEnabled()) return
+    return onAuthChange(setAuthUser)
+  }, [])
+
+  const authUserId = authUser?.id ?? null
+  const cloudReady = isCloudEnabled() && authUserId !== null
 
   useEffect(() => {
     void fetchCommunityFoods().then(setCommunityFoods)
@@ -81,13 +95,39 @@ export function useTracker() {
   const cloudUsername = state.profile?.username
 
   useEffect(() => {
-    if (!cloudUsername || !isCloudEnabled()) return
+    if (!cloudUsername || !authUserId || !isCloudEnabled()) return
     let cancel = false
+    let claimed = false
+
+    async function ensureClaimed(): Promise<boolean> {
+      if (claimed) return true
+      const local = loadState().profile
+      if (!local) return false
+      const reg = await claimProfile(local.username, local.name, local.avatarUrl)
+      if (cancel) return false
+      if (!reg.ok) {
+        setErrorMessage(reg.error ?? 'Could not link your profile to this account.')
+        return false
+      }
+      claimed = true
+      const cloudName = reg.cloudUsername ?? local.username
+      setState((s) => ({
+        ...s,
+        cloudUserId: reg.userId ?? s.cloudUserId,
+        profile: s.profile ? { ...s.profile, username: cloudName } : s.profile,
+      }))
+      if (cloudName !== local.username) {
+        setStatusMessage(`This account's username is @${cloudName}.`)
+        return false
+      }
+      return true
+    }
 
     async function syncOnce() {
+      if (!(await ensureClaimed())) return
       const [remoteEntries, remoteFriends, remoteRooms] = await Promise.all([
-        fetchDiary(cloudUsername!),
-        fetchFriends(cloudUsername!),
+        fetchDiary(),
+        fetchFriends(),
         fetchRooms(cloudUsername!),
       ])
       const remoteMessages = (
@@ -120,7 +160,7 @@ export function useTracker() {
           .map((id) => removeDiaryEntry(id)),
         ...[...deletedFriends]
           .filter((name) => remoteFriendNames.has(name))
-          .map((name) => deleteFriendship(cloudUsername!, name)),
+          .map((name) => deleteFriendship(name)),
       ])
       for (const result of reassertDeletes) {
         if (!result.ok && result.error) {
@@ -163,12 +203,13 @@ export function useTracker() {
       cancel = true
       window.clearInterval(interval)
     }
-  }, [cloudUsername])
+  }, [cloudUsername, authUserId])
 
   const roomKey = state.chatRooms.map((room) => room.id).join('|')
 
   useEffect(() => {
-    if (!isCloudEnabled() || !roomKey) return
+    // Re-subscribe after sign-in so Realtime checks RLS with the user's token.
+    if (!authUserId || !isCloudEnabled() || !roomKey) return
     const stops = state.chatRooms.map((room) =>
       subscribeMessages(room.id, (message) => {
         setState((s) => {
@@ -180,7 +221,7 @@ export function useTracker() {
     return () => {
       for (const stop of stops) stop()
     }
-  }, [roomKey])
+  }, [roomKey, authUserId])
 
   const streak = useMemo(
     () => computeStreak(state.entries.map((e) => e.date)),
@@ -206,24 +247,29 @@ export function useTracker() {
   const setProfile = useCallback(async (profile: UserProfile) => {
     setState((s) => ({ ...s, profile }))
 
-    if (!isCloudEnabled() || !profile.username) {
+    if (!isCloudReady() || !profile.username) {
       setStatusMessage('Profile saved on this device.')
       return true
     }
 
     try {
-      const reg = await registerUsername(
+      const reg = await claimProfile(
         profile.username,
         profile.name,
         profile.avatarUrl,
       )
       if (reg.ok) {
+        const username = reg.cloudUsername ?? profile.username
         setState((s) => ({
           ...s,
-          profile,
+          profile: { ...profile, username },
           cloudUserId: reg.userId ?? s.cloudUserId,
         }))
-        setStatusMessage('Profile saved and synced.')
+        setStatusMessage(
+          username === profile.username
+            ? 'Profile saved and synced.'
+            : `Profile synced. Usernames are permanent, so you stay @${username}.`,
+        )
         return true
       }
       if (reg.soft || reg.error?.includes('not configured')) {
@@ -278,7 +324,7 @@ export function useTracker() {
         entries: [...s.entries, entry],
         deletedEntryIds: (s.deletedEntryIds ?? []).filter((id) => id !== entry.id),
       }))
-      if (state.profile) {
+      if (state.profile && isCloudReady()) {
         void pushDiaryEntry(state.profile.username, entry).then((result) => {
           if (!result.ok && result.error) setErrorMessage(result.error)
         })
@@ -311,7 +357,7 @@ export function useTracker() {
           }
           return updated
         })
-        if (updated && username) {
+        if (updated && username && isCloudReady()) {
           void pushDiaryEntry(username, updated).then((result) => {
             if (!result.ok && result.error) setErrorMessage(result.error)
           })
@@ -330,11 +376,11 @@ export function useTracker() {
         entries: s.entries.filter((e) => e.id !== id),
         deletedEntryIds: rememberIds(s.deletedEntryIds ?? [], [id]),
       }))
-      void removeDiaryEntry(id).then((result) => {
-        if (!result.ok && isCloudEnabled() && result.error) {
-          setErrorMessage(result.error)
-        }
-      })
+      if (isCloudReady()) {
+        void removeDiaryEntry(id).then((result) => {
+          if (!result.ok && result.error) setErrorMessage(result.error)
+        })
+      }
       setStatusMessage('Entry removed.')
     },
     [],
@@ -353,7 +399,9 @@ export function useTracker() {
       }
       setState((s) => ({ ...s, customFoods: [item, ...s.customFoods] }))
 
-      if (options?.shareGlobally) {
+      if (options?.shareGlobally && !isCloudReady()) {
+        setErrorMessage('Sign in from Profile to share foods with the community.')
+      } else if (options?.shareGlobally) {
         const pub = await publishSharedFood(food, username)
         if (pub.ok) {
           setCommunityFoods(await fetchCommunityFoods())
@@ -376,11 +424,9 @@ export function useTracker() {
       entries: s.entries.filter((e) => e.date !== selectedDate),
       deletedEntryIds: rememberIds(s.deletedEntryIds ?? [], dayIds),
     }))
-    if (state.profile) {
-      void clearDiaryDay(state.profile.username, selectedDate).then((result) => {
-        if (!result.ok && isCloudEnabled() && result.error) {
-          setErrorMessage(result.error)
-        }
+    if (state.profile && isCloudReady()) {
+      void clearDiaryDay(selectedDate).then((result) => {
+        if (!result.ok && result.error) setErrorMessage(result.error)
       })
     }
     setStatusMessage('All food cleared for this day.')
@@ -433,9 +479,9 @@ export function useTracker() {
           ),
         }
       })
-      if (state.profile) {
+      if (state.profile && isCloudReady()) {
         void saveFriendship(state.profile.username, friend).then((res) => {
-          if (!res.ok && isCloudEnabled() && res.error) setErrorMessage(res.error)
+          if (!res.ok && res.error) setErrorMessage(res.error)
         })
       }
       setStatusMessage(`Added @${friend.username}.`)
@@ -453,9 +499,9 @@ export function useTracker() {
           username,
         ]),
       }))
-      if (state.profile) {
-        void deleteFriendship(state.profile.username, username).then((res) => {
-          if (!res.ok && isCloudEnabled() && res.error) setErrorMessage(res.error)
+      if (state.profile && isCloudReady()) {
+        void deleteFriendship(username).then((res) => {
+          if (!res.ok && res.error) setErrorMessage(res.error)
         })
       }
       setStatusMessage(`Removed @${username}.`)
@@ -464,7 +510,7 @@ export function useTracker() {
   )
 
   const createChatRoom = useCallback(async (title: string, members: string[]) => {
-    const remote = isCloudEnabled() ? await createCloudRoom(title, members) : null
+    const remote = isCloudReady() ? await createCloudRoom(title, members) : null
     const room: ChatRoom = remote ?? {
       id: uid(),
       title,
@@ -477,7 +523,7 @@ export function useTracker() {
         ? s.chatRooms
         : [room, ...s.chatRooms],
     }))
-    if (!remote && isCloudEnabled()) {
+    if (!remote && isCloudReady()) {
       void pushCloudRoom(room)
     }
     return room
@@ -493,8 +539,9 @@ export function useTracker() {
         authorName: state.profile.name,
         body: body.trim(),
       }
-      const remote = isCloudEnabled() ? await sendCloudMessage(draft) : null
-      if (isCloudEnabled() && !remote) {
+      const ready = isCloudReady()
+      const remote = ready ? await sendCloudMessage(draft) : null
+      if (ready && !remote) {
         const err = 'Could not send message. Try again.'
         setErrorMessage(err)
         return { ok: false, error: err }
@@ -534,6 +581,17 @@ export function useTracker() {
     setStatusMessage(message)
   }, [])
 
+  const requestSignInLink = useCallback(async (email: string) => {
+    const result = await sendMagicLink(email)
+    if (result.ok) setStatusMessage(`Sign-in link sent to ${email.trim()}. Open it on this device.`)
+    return result
+  }, [])
+
+  const signOut = useCallback(async () => {
+    await signOutCloud()
+    setStatusMessage('Signed out. Your diary stays on this device.')
+  }, [])
+
   return {
     state,
     profile: state.profile,
@@ -554,7 +612,13 @@ export function useTracker() {
     streak,
     streakWeek,
     communityFoods,
-    cloudEnabled: isCloudEnabled(),
+    /** Keys are set on this deployment (sign-in is possible). */
+    cloudConfigured: isCloudEnabled(),
+    /** Keys are set and the user is signed in, so private data syncs. */
+    cloudEnabled: cloudReady,
+    authEmail: authUser?.email ?? null,
+    requestSignInLink,
+    signOut,
     addFriend,
     removeFriend,
     createChatRoom,

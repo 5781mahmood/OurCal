@@ -44,6 +44,16 @@ test.describe('Profile', () => {
     ).toBeVisible()
   })
 
+  test('local-first mode: without Supabase keys there is no sign-in and no account needed', async ({
+    page,
+  }) => {
+    const card = page.getByRole('region', { name: 'Cloud account' })
+    await expect(card).toContainText('No account needed')
+    await expect(card.getByLabel('Email')).toHaveCount(0)
+    await expect(card.getByRole('button', { name: 'Email me a sign-in link' })).toHaveCount(0)
+    await expect(page.locator('.cloud-status')).toHaveText('This device only')
+  })
+
   test('Edit profile Cancel returns without saving a rename', async ({ page }) => {
     await page.getByRole('button', { name: 'Edit profile' }).click()
     await expect(page.getByRole('heading', { name: 'Set your daily target' })).toBeVisible()

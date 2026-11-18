@@ -28,6 +28,28 @@ test.describe('Today diary', () => {
     ).toBeVisible()
   })
 
+  test('local-first mode: logging and deleting food never surfaces a cloud error', async ({
+    page,
+  }) => {
+    // toHaveCount(0) would retry until the 4.2s toast auto-dismisses and pass
+    // anyway, so assert the error toast never appears within the window.
+    const errorToast = page.locator('.toast.error')
+    const appears = () =>
+      errorToast.waitFor({ state: 'visible', timeout: 1500 }).then(
+        () => true,
+        () => false,
+      )
+
+    await logFoodFromSearch(page, 'Breakfast', 'banana', 'Banana')
+    await expect(page.getByText('Banana logged.')).toBeVisible()
+    expect(await appears(), 'error toast after logging').toBe(false)
+
+    const mealBlock = page.locator('article.meal-block').filter({ hasText: 'Breakfast' })
+    await mealBlock.getByRole('button', { name: 'Delete Banana' }).click()
+    await expect(page.getByText('Entry removed.')).toBeVisible()
+    expect(await appears(), 'error toast after deleting').toBe(false)
+  })
+
   test('deleting a food removes it and resets the ring', async ({ page }) => {
     await logFoodFromSearch(page, 'Lunch', 'apple', 'Apple')
     expect(await ringCalories(page)).toBe(95)

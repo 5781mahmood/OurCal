@@ -24,12 +24,13 @@ Screenshots use a fictional profile seeded in the browser (`scripts/capture-scre
 - Friends via username, invite link (`/app?u=`), or QR, plus direct and small group chat
 - Profile editing, photo, JSON export and import
 - Diary stays in `localStorage` when cloud keys are absent
+- Optional email magic-link sign-in. Postgres row-level security keeps each diary, profile, friend list and DM private to its owner ([security model](docs/security.md))
 
 ## Tech stack
 
 - React 19, TypeScript, Vite
 - React Router
-- Supabase (optional Postgres + Realtime)
+- Supabase (optional Auth, Postgres with row-level security, Realtime)
 - Recharts
 - qrcode.react and html5-qrcode
 - Vitest and Playwright
@@ -37,15 +38,16 @@ Screenshots use a fictional profile seeded in the browser (`scripts/capture-scre
 
 ## Testing
 
-Vitest covers nutrition, balance index, macro levels, streak, and badges. Playwright drives Chromium against the Vite app (`playwright.config.ts` starts the dev server).
+Vitest covers nutrition, balance index, macro levels, streak, and badges. Playwright drives Chromium against the Vite app (`playwright.config.ts` starts the dev server), and also runs the database security tests against real Postgres.
 
 | Area | What the specs check |
 |------|----------------|
 | Onboarding | Calorie goal appears; name required; Start tracking opens Today; Protein / Carbs / Fat labels |
-| Diary | Logging updates the ring; delete clears it; servings stepper; day navigation and Jump to today; clear-day confirm and cancel; empty search; custom food |
+| Diary | Logging updates the ring; delete clears it; servings stepper; day navigation and Jump to today; clear-day confirm and cancel; empty search; custom food; no cloud errors in local-first mode |
+| Row-level security | Runs `supabase/*.sql` in real Postgres ([PGlite](https://pglite.dev)): signed-out visitors read no private rows; a signed-in user sees only their own diary and cannot write to anyone else's; profile, DM, friend list and shared-food rules |
 | Routing | Landing call to action; custom 404; invite `?u=` opens People |
 | People | QR and copy invite (`/app?u=`); no group with zero friends; cannot add yourself; chat Send stays disabled until there is text |
-| Stats / Profile | Empty week copy; chart after a log; macro columns; Cancel edit; JSON download |
+| Stats / Profile | Empty week copy; chart after a log; macro columns; no sign-in without keys; Cancel edit; JSON download |
 | Persistence | Reload keeps the diary; export, wipe, and import restores meals |
 | Macros / balance | Level words; protein line after chicken; meal kcal header |
 | Accessibility smoke | Nav by role; Escape closes the add-food dialog; ring `aria-label` |
@@ -56,7 +58,7 @@ npm test
 npm run test:e2e
 ```
 
-Latest local run: Vitest **12 passed** (5 files). Playwright **40 passed**.
+Latest local run: Vitest **12 passed** (5 files). Playwright **51 passed, 2 skipped**. The 2 skipped tests are `e2e/auth-live.spec.ts`, which only run against a real Supabase test project ([how to run them](docs/security.md#running-the-live-tests)).
 
 Headed and UI modes: `npm run test:e2e:headed`, `npm run test:e2e:ui`.
 
@@ -80,7 +82,8 @@ GitHub Actions (`.github/workflows/e2e.yml`) runs the unit tests and Playwright 
 | `src/pages/*` | Landing and 404 |
 | `src/data/` | Bundled food catalog |
 | `e2e/` | Playwright specs and helpers |
-| `supabase/*.sql` | Postgres tables, RLS, realtime |
+| `supabase/*.sql` | Postgres tables, realtime; `auth_rls.sql` holds every access policy |
+| `docs/security.md` | Auth flow and each policy in plain English |
 | `scripts/capture-screenshots.mjs` | Demo screenshots for this README |
 
 ## Run locally
@@ -99,14 +102,15 @@ npm run build
 ## Supabase (optional)
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. In the SQL editor, run `supabase/schema.sql`, then `supabase/social.sql`.
-3. Copy the project URL and the anon public key (not `service_role`).
-4. On Vercel, set these as Config variables, then redeploy. Vite reads them at build time:
+2. In the SQL editor, run `supabase/schema.sql`, then `supabase/social.sql`, then `supabase/auth_rls.sql`.
+3. Under Authentication, keep the Email provider on and add `https://<your-domain>/app` to Redirect URLs.
+4. Copy the project URL and the anon public key (not `service_role`).
+5. On Vercel, set these as Config variables, then redeploy. Vite reads them at build time:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
 
-Without those keys the diary still works on one device. Placeholder values `0` and `1` are ignored.
+Without those keys the diary still works on one device and there is no sign-in. Placeholder values `0` and `1` are ignored. With keys, signed-out visitors still use the app locally; signing in from Profile turns on sync. See [docs/security.md](docs/security.md) for what each policy allows.
 
 ## Known limits
 
-Supabase row-level security in this repo is demo-open so more than one browser can share foods, friends, and chat in a class setting. A production deployment needs Supabase Auth and per-user policies. There is no USDA bulk import and no dedicated avatar storage bucket.
+Usernames are permanent once claimed in the cloud. Rows created under the old open demo policies have no owner and become invisible after `auth_rls.sql` runs. There is no block list for DMs, no USDA bulk import, and no dedicated avatar storage bucket.

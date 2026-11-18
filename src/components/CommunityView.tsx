@@ -28,6 +28,7 @@ export function CommunityView({ tracker, profile }: CommunityViewProps) {
     createChatRoom,
     sendChatMessage,
     cloudEnabled,
+    cloudConfigured,
   } = tracker
 
   const [friendInput, setFriendInput] = useState('')
@@ -191,10 +192,15 @@ export function CommunityView({ tracker, profile }: CommunityViewProps) {
         </p>
       </header>
 
-      {!cloudEnabled ? (
+      {!cloudConfigured ? (
         <p className="banner-note">
           Cloud sync is offline on this deployment. Friends and chat still work on
           this device. Add Supabase keys to enable global usernames and shared foods.
+        </p>
+      ) : !cloudEnabled ? (
+        <p className="banner-note">
+          You're signed out. Friends and chat stay on this device until you sign in
+          from Profile.
         </p>
       ) : null}
 
