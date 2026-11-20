@@ -1,5 +1,6 @@
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js'
 import type { ChatMessage, ChatRoom, DiaryEntry, FoodItem, FriendLink } from '../types'
+import { isValidUsername, normalizeUsername, usernameHint } from './username'
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -108,12 +109,9 @@ export async function claimProfile(
   const user = currentUser
   if (!user) return { ok: false, error: 'Sign in from Profile to sync across devices.', soft: true }
 
-  const normalized = username.trim().replace(/\s+/g, ' ').toLowerCase()
-  if (!/^[a-z0-9_ ]{3,20}$/.test(normalized)) {
-    return {
-      ok: false,
-      error: 'Username must be 3–20 characters. Letters, numbers, spaces, and underscores only.',
-    }
+  const normalized = normalizeUsername(username)
+  if (!isValidUsername(normalized)) {
+    return { ok: false, error: `Username: ${usernameHint()}` }
   }
 
   // Never send oversized data URLs to Postgres text columns.
@@ -355,7 +353,7 @@ export async function pushCloudRoom(room: ChatRoom): Promise<{ ok: boolean; erro
     member_usernames: room.memberUsernames,
     created_at: room.createdAt,
   })
-  // Ignore duplicate key — room already cloud-backed.
+  // A duplicate key means the room is already in the cloud.
   if (error && !/duplicate|unique/i.test(error.message)) {
     return { ok: false, error: error.message }
   }

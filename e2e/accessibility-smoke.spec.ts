@@ -1,10 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { completeOnboarding, logFoodFromSearch } from './helpers'
 
-/**
- * Portfolio angle: companies care that critical flows are keyboard-reachable
- * and that interactive controls have accessible names (getByRole works = good a11y).
- */
+// Accessible names for nav and the calorie ring, and Escape closing the add-food dialog.
 test.describe('Accessibility smoke', () => {
   test('primary app nav is reachable by role name after onboarding', async ({ page }) => {
     await completeOnboarding(page)

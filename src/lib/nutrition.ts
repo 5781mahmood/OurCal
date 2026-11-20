@@ -7,7 +7,7 @@ import type {
   UserProfile,
 } from '../types'
 
-/** Activity multipliers used with Mifflin–St Jeor BMR → TDEE. */
+/** Activity multipliers used with Mifflin-St Jeor BMR → TDEE. */
 export const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
   sedentary: 1.2,
   light: 1.375,
@@ -18,15 +18,15 @@ export const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
 
 export const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
   sedentary: 'Sedentary (little/no exercise)',
-  light: 'Light (1–3 days/week)',
-  moderate: 'Moderate (3–5 days/week)',
-  active: 'Active (6–7 days/week)',
+  light: 'Light (1-3 days/week)',
+  moderate: 'Moderate (3-5 days/week)',
+  active: 'Active (6-7 days/week)',
   very_active: 'Very active (physical job / 2× training)',
 }
 
 /**
- * Mifflin–St Jeor resting metabolic rate (kcal/day).
- * Widely used clinical estimate — not a lab measurement.
+ * Mifflin-St Jeor resting metabolic rate (kcal/day).
+ * Widely used clinical estimate, not a lab measurement.
  */
 export function mifflinStJeorBmr(
   sex: Sex,

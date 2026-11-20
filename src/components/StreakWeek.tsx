@@ -46,7 +46,7 @@ export function StreakWeek({ days, animate = true, className = '' }: StreakWeekP
   )
 }
 
-/** Static demo week for marketing (Mon–Sun labels, fixed logged pattern). */
+/** Static demo week for marketing (Mon-Sun labels, fixed logged pattern). */
 export function DemoStreakWeek() {
   const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
   const logged = [true, true, true, true, false, false, false]

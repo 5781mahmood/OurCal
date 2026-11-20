@@ -34,12 +34,6 @@ export function SiteHeader() {
           <Link to="/app" onClick={() => setOpen(false)}>
             Open app
           </Link>
-          <a href="mailto:hello@ourcal.app" onClick={() => setOpen(false)}>
-            hello@ourcal.app
-          </a>
-          <a href="tel:+19055550192" onClick={() => setOpen(false)}>
-            +1 (905) 555-0192
-          </a>
         </nav>
       </div>
     </header>
@@ -58,10 +52,11 @@ export function SiteFooter() {
           <Link to="/app">Open app</Link>
           <Link to="/#product">Product</Link>
           <Link to="/#balance">Balance index</Link>
-          <a href="mailto:hello@ourcal.app">hello@ourcal.app</a>
-          <a href="tel:+19055550192">+1 (905) 555-0192</a>
+          <a href="https://github.com/5781mahmood/OurCal" target="_blank" rel="noreferrer">
+            GitHub
+          </a>
         </nav>
-        <p className="site-footer-copy">© {year} OurCal. Built for daily consistency.</p>
+        <p className="site-footer-copy">© {year} OurCal</p>
       </div>
     </footer>
   )

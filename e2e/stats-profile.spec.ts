@@ -29,13 +29,13 @@ test.describe('Stats', () => {
 
 test.describe('Profile', () => {
   test.beforeEach(async ({ page }) => {
-    await completeOnboarding(page, { name: 'Sam Profile', username: 'sam profile' })
+    await completeOnboarding(page, { name: 'Sam Profile', username: 'sam_profile' })
     await page.getByRole('button', { name: 'Profile' }).first().click()
   })
 
   test('shows name, username, macro columns, and sync status', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Sam Profile' })).toBeVisible()
-    await expect(page.getByText('@sam profile')).toBeVisible()
+    await expect(page.getByText('@sam_profile')).toBeVisible()
     await expect(page.locator('.macro-goal-cols').getByText('Protein')).toBeVisible()
     await expect(page.locator('.macro-goal-cols').getByText('Carbs')).toBeVisible()
     await expect(page.locator('.macro-goal-cols').getByText('Fat')).toBeVisible()
@@ -74,6 +74,6 @@ test.describe('Profile', () => {
     const raw = await fs.readFile(path!, 'utf8')
     const data = JSON.parse(raw) as { app?: string; profile?: { username?: string } }
     expect(data.app).toBe('OurCal')
-    expect(data.profile?.username).toBe('sam profile')
+    expect(data.profile?.username).toBe('sam_profile')
   })
 })

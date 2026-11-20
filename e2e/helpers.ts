@@ -27,7 +27,7 @@ export type OnboardOptions = {
 export async function completeOnboarding(page: Page, options: OnboardOptions = {}) {
   const {
     name = 'Alex Student',
-    username = 'alex student',
+    username = 'alex_student',
     age = '22',
     heightCm = '175',
     weightKg = '75',
@@ -56,7 +56,7 @@ export async function logFoodFromSearch(
   await mealBlock.getByRole('button', { name: 'Add food' }).click()
   await expect(page.getByRole('dialog', { name: `Add to ${meal}` })).toBeVisible()
   await page.getByLabel('Search foods').fill(query)
-  // Use a plain string name — RegExp would treat "(cooked)" as a capture group.
+  // Use a plain string name. A RegExp would treat "(cooked)" as a capture group.
   await page.getByRole('button', { name: foodName }).first().click()
   await page.getByRole('button', { name: 'Log food' }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)

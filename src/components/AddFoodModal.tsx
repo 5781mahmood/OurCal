@@ -27,6 +27,13 @@ interface AddFoodModalProps {
 
 type Tab = 'search' | 'custom'
 
+/** e.g. "Oatmeal (cooked), 1 cup, 158 kcal" */
+function foodRowLabel(food: FoodItem): string {
+  const parts = [food.name, food.servingLabel, `${food.calories} kcal`]
+  if (food.contributedBy) parts.push(`shared by @${food.contributedBy}`)
+  return parts.join(', ')
+}
+
 export function AddFoodModal({
   open,
   meal,
@@ -201,7 +208,9 @@ export function AddFoodModal({
                 <li key={food.id}>
                   <button
                     type="button"
-                    className={selected?.id === food.id ? 'food-row selected' : 'food-row'}
+                    className="food-row"
+                    aria-label={foodRowLabel(food)}
+                    aria-pressed={selected?.id === food.id}
                     onClick={() => setSelected(food)}
                   >
                     <span>

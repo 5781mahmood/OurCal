@@ -887,6 +887,12 @@ select:focus {
   color: var(--muted);
 }
 
+.field-error {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--warn);
+}
+
 .avatar-picker {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1282,9 +1288,18 @@ select:focus {
   display: block;
 }
 
-.food-row.selected,
 .food-row:hover {
-  background: color-mix(in srgb, var(--accent) 8%, var(--paper));
+  background: color-mix(in srgb, var(--accent) 6%, var(--paper));
+}
+
+.food-row[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--accent) 16%, var(--paper));
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.food-row[aria-pressed='true'] strong::after {
+  content: ' ✓';
+  color: var(--accent);
 }
 
 .servings-row {

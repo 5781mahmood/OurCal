@@ -1,13 +1,10 @@
 import { test, expect } from '@playwright/test'
 import { completeOnboarding, logFoodFromSearch, ringCalories } from './helpers'
 
-/**
- * Portfolio angle: local-first apps must survive reload. Interviewers ask
- * "what happens if the user refreshes?" — this proves localStorage persistence.
- */
+// localStorage persistence across reloads, and JSON export/import round trip.
 test.describe('Persistence', () => {
   test('profile and logged food survive a full page reload', async ({ page }) => {
-    await completeOnboarding(page, { name: 'Persist User', username: 'persist user' })
+    await completeOnboarding(page, { name: 'Persist User', username: 'persist_user' })
     await logFoodFromSearch(page, 'Breakfast', 'banana', 'Banana')
     expect(await ringCalories(page)).toBe(105)
 
@@ -21,7 +18,7 @@ test.describe('Persistence', () => {
   })
 
   test('import JSON restores a previously exported diary', async ({ page }) => {
-    await completeOnboarding(page, { name: 'Export Me', username: 'export me' })
+    await completeOnboarding(page, { name: 'Export Me', username: 'export_me' })
     await logFoodFromSearch(page, 'Snack', 'apple', 'Apple')
 
     await page.getByRole('button', { name: 'Profile' }).first().click()
@@ -38,7 +35,7 @@ test.describe('Persistence', () => {
 
     // Complete a throwaway onboard so Profile is reachable, then import over it.
     await page.getByLabel('Display name').fill('Temp')
-    await page.getByLabel('Username').fill('temp user')
+    await page.getByLabel('Username').fill('temp_user')
     await page.getByRole('button', { name: 'Start tracking' }).click()
     await page.getByRole('button', { name: 'Profile' }).first().click()
 

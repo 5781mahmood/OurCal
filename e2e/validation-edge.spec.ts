@@ -1,18 +1,30 @@
 import { test, expect } from '@playwright/test'
 import { completeOnboarding, resetApp } from './helpers'
 
-/**
- * Portfolio angle: edge cases / negative paths. Senior interviews love
- * "what happens when input is invalid?" — show you test failure modes.
- */
+// Invalid input and edge cases: bad usernames, bad friend input, disabled controls, reset.
 test.describe('Validation and edge cases', () => {
   test('invalid username on onboarding shows the username hint', async ({ page }) => {
     await resetApp(page)
+    const username = page.getByLabel('Username')
+    const fieldError = page.locator('#username-error')
     await page.getByLabel('Display name').fill('Bad Handle')
-    await page.getByLabel('Username').fill('ab') // too short (< 3)
+
+    // Too long: the full value stays in the field and the error says why.
+    const long = 'a'.repeat(23)
+    await username.fill(long)
+    await expect(username).toHaveValue(long)
+    await expect(fieldError).toHaveText('Too long: 23 characters. The limit is 20.')
+    await expect(username).toHaveAttribute('aria-invalid', 'true')
+
+    await username.fill('bad handle')
+    await expect(fieldError).toHaveText('Spaces are not allowed. Use an underscore instead.')
+
+    await username.fill('ab') // too short (< 3), only reported after submit
+    await expect(fieldError).toHaveCount(0)
     await page.getByRole('button', { name: 'Start tracking' }).click()
     // Hint is always visible; the submit error uses .form-error (same copy).
-    await expect(page.locator('.form-error')).toContainText(/3–20 characters/i)
+    await expect(page.locator('.form-error')).toContainText(/3-20 characters/i)
+    await expect(fieldError).toContainText('Too short')
     await expect(page.getByLabel('Previous day')).toHaveCount(0)
   })
 
@@ -45,7 +57,7 @@ test.describe('Validation and edge cases', () => {
   })
 
   test('Reset everything returns the user to onboarding after confirm', async ({ page }) => {
-    await completeOnboarding(page, { name: 'Wipe Me', username: 'wipe me' })
+    await completeOnboarding(page, { name: 'Wipe Me', username: 'wipe_me' })
     await page.getByRole('button', { name: 'Profile' }).first().click()
     page.once('dialog', (d) => d.accept())
     await page.getByRole('button', { name: 'Reset everything' }).click()

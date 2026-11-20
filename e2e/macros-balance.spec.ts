@@ -1,10 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { completeOnboarding, logFoodFromSearch, ringCalories } from './helpers'
 
-/**
- * Portfolio angle: domain UI — macros and balance are product differentiators.
- * Assert labels/levels, not just "something rendered."
- */
+// Macro level words, macro values and meal calorie headers after logging food.
 test.describe('Macros and balance', () => {
   test('macro bars show level words (Low / On track / High / Over)', async ({ page }) => {
     await completeOnboarding(page)

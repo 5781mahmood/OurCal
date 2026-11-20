@@ -7,7 +7,14 @@ import {
   estimateTdee,
 } from '../lib/nutrition'
 import { compressImageFile } from '../lib/image'
-import { isValidUsername, normalizeUsername, usernameHint } from '../lib/username'
+import {
+  USERNAME_MIN,
+  isValidUsername,
+  normalizeUsername,
+  suggestUsername,
+  usernameError,
+  usernameHint,
+} from '../lib/username'
 
 interface OnboardingProps {
   onComplete: (profile: UserProfile) => Promise<boolean>
@@ -15,19 +22,12 @@ interface OnboardingProps {
   onCancel?: () => void
 }
 
-function suggestUsername(name: string): string {
-  const base = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9 ]+/g, '')
-    .replace(/\s+/g, ' ')
-    .slice(0, 20)
-  return base.length >= 3 ? base : 'ourcal user'
-}
-
 export function Onboarding({ onComplete, initial, onCancel }: OnboardingProps) {
   const [name, setName] = useState(initial?.name ?? '')
   const [username, setUsername] = useState(initial?.username ?? '')
+  // Keep suggesting from the display name until the user types a username.
+  const [usernameEdited, setUsernameEdited] = useState(Boolean(initial))
+  const [submitted, setSubmitted] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState(initial?.avatarUrl ?? '')
   const [sex, setSex] = useState<Sex>(initial?.sex ?? 'male')
   const [age, setAge] = useState(initial?.age?.toString() ?? '22')
@@ -79,6 +79,7 @@ export function Onboarding({ onComplete, initial, onCancel }: OnboardingProps) {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    setSubmitted(true)
     if (!preview) {
       setError('Enter valid age, height, and weight.')
       return
@@ -115,13 +116,19 @@ export function Onboarding({ onComplete, initial, onCancel }: OnboardingProps) {
     preview &&
     estimateTdee(sex, Number(weightKg), Number(heightCm), Number(age), activity)
 
+  // Too-short is only reported after a submit so the first keystrokes stay quiet.
+  const liveUsernameError = usernameError(username)
+  const usernameTooShort = normalizeUsername(username).length < USERNAME_MIN
+  const showUsernameError =
+    liveUsernameError !== null && (submitted || !usernameTooShort)
+
   return (
     <div className="onboard">
       <div className="onboard-panel">
         <p className="eyebrow">OurCal</p>
         <h1>Set your daily target</h1>
         <p className="lede">
-          Mifflin–St Jeor estimates your calories. Pick a username for friends and QR
+          Mifflin-St Jeor estimates your calories. Pick a username for friends and QR
           invites. You can start tracking even if cloud sync is offline.
         </p>
 
@@ -132,7 +139,7 @@ export function Onboarding({ onComplete, initial, onCancel }: OnboardingProps) {
               value={name}
               onChange={(e) => {
                 setName(e.target.value)
-                if (!initial && !username) setUsername(suggestUsername(e.target.value))
+                if (!usernameEdited) setUsername(suggestUsername(e.target.value))
               }}
               autoComplete="name"
             />
@@ -142,11 +149,26 @@ export function Onboarding({ onComplete, initial, onCancel }: OnboardingProps) {
             Username
             <input
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => {
+                setUsernameEdited(true)
+                setUsername(e.target.value)
+              }}
               autoComplete="username"
-              maxLength={20}
+              autoCapitalize="none"
+              spellCheck={false}
+              aria-invalid={showUsernameError}
+              aria-describedby={
+                showUsernameError ? 'username-hint username-error' : 'username-hint'
+              }
             />
-            <span className="field-hint">{usernameHint()}</span>
+            <span id="username-hint" className="field-hint">
+              {usernameHint()}
+            </span>
+            {showUsernameError ? (
+              <span id="username-error" className="field-error" role="alert">
+                {liveUsernameError}
+              </span>
+            ) : null}
           </label>
 
           <div className="avatar-picker">

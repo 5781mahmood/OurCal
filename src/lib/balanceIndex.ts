@@ -1,6 +1,6 @@
 import type { Macros, UserProfile } from '../types'
 
-/** OurCal-only score: how close today is to calorie + macro targets (0–100). */
+/** OurCal-only score: how close today is to calorie + macro targets (0-100). */
 export function balanceIndex(
   totals: Macros & { calories: number },
   profile: UserProfile,

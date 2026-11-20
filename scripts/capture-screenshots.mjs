@@ -1,5 +1,5 @@
 /**
- * Capture recruiter screenshots from demo data only.
+ * Capture README screenshots from demo data only.
  * Run: node scripts/capture-screenshots.mjs
  * Starts Vite, seeds localStorage with a fictional profile, writes:
  *   docs/screenshots/today.png
@@ -40,7 +40,7 @@ function demoState() {
   return {
     profile: {
       name: 'Alex Demo',
-      username: 'alex demo',
+      username: 'alex_demo',
       avatarUrl: '',
       sex: 'female',
       age: 22,
@@ -137,7 +137,7 @@ function demoState() {
     customFoods: [],
     friends: [
       {
-        username: 'jordan lee',
+        username: 'jordan_lee',
         displayName: 'Jordan Lee',
         avatarUrl: '',
         addedAt: new Date().toISOString(),
@@ -146,8 +146,8 @@ function demoState() {
     chatRooms: [
       {
         id: 'demo-room',
-        title: '@jordan lee',
-        memberUsernames: ['alex demo', 'jordan lee'],
+        title: '@jordan_lee',
+        memberUsernames: ['alex_demo', 'jordan_lee'],
         createdAt: new Date().toISOString(),
       },
     ],
@@ -155,7 +155,7 @@ function demoState() {
       {
         id: 'demo-msg',
         roomId: 'demo-room',
-        authorUsername: 'jordan lee',
+        authorUsername: 'jordan_lee',
         authorName: 'Jordan Lee',
         body: 'Logged lunch. On track for protein today.',
         createdAt: new Date().toISOString(),

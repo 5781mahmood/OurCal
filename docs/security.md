@@ -9,7 +9,7 @@ OurCal works in two modes:
 
 The Supabase **anon key** ships inside the JavaScript bundle. Anyone can copy it out of the browser and call the Supabase REST API directly, skipping OurCal's UI completely. So "the app only asks for my rows" protects nothing. The only real guard is **Row Level Security (RLS)** in Postgres: for every query, Postgres checks a rule (a *policy*) against each row and silently hides rows the caller isn't allowed to see, or rejects writes that break the rule.
 
-The old demo schema had RLS turned on, but every policy was `using (true)`, which means "everyone may do everything". This branch replaces those with per-user rules in [`supabase/auth_rls.sql`](../supabase/auth_rls.sql).
+The old demo schema had RLS turned on, but every policy was `using (true)`, which means "everyone may do everything". [`auth_rls.sql`](../supabase/auth_rls.sql) replaces those with per-user rules.
 
 The `service_role` key bypasses RLS entirely. It is never used by the app. It is only used by the optional live test (in Node, on your machine or in CI) to create and delete throwaway test users.
 

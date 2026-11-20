@@ -18,7 +18,7 @@ test.describe('Marketing and routing', () => {
     await expect(
       page.getByRole('heading', { name: 'This page is not in the diary.' }),
     ).toBeVisible()
-    // Header/footer also link to the app — scope to the 404 main CTA.
+    // Header and footer also link to the app, so scope to the 404 main CTA.
     const main = page.getByRole('main')
     await expect(main.getByRole('link', { name: 'Home' })).toBeVisible()
     await expect(main.getByRole('link', { name: 'Open app' })).toBeVisible()
@@ -34,7 +34,7 @@ test.describe('Marketing and routing', () => {
 
   test('invite deep link /app?u= opens People after onboarding', async ({ page }) => {
     // Seed a profile first, then hit an invite URL like a scanned QR would.
-    await completeOnboarding(page, { username: 'host user' })
+    await completeOnboarding(page, { username: 'host_user' })
     await page.goto('/app?u=friend_demo')
     // Without cloud, unknown usernames still add locally; People tab should open.
     await expect(page.getByRole('heading', { name: 'Friends and chat' })).toBeVisible()

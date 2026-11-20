@@ -16,7 +16,7 @@ Screenshots use a fictional profile seeded in the browser (`scripts/capture-scre
 
 ## Features
 
-- Onboarding estimates a daily calorie target (Mifflin–St Jeor) and protein, carb, and fat goals
+- Onboarding estimates a daily calorie target (Mifflin-St Jeor) and protein, carb, and fat goals
 - Diary for Breakfast, Lunch, Dinner, and Snack, with search, custom foods, and a servings stepper
 - Calorie ring, balance index, and macro levels (Low, On track, High, Over)
 - Streak and badges
@@ -38,11 +38,11 @@ Screenshots use a fictional profile seeded in the browser (`scripts/capture-scre
 
 ## Testing
 
-Vitest covers nutrition, balance index, macro levels, streak, and badges. Playwright drives Chromium against the Vite app (`playwright.config.ts` starts the dev server), and also runs the database security tests against real Postgres.
+Vitest covers nutrition, balance index, macro levels, streak, badges, usernames, and invite links. Playwright drives Chromium against the Vite app (`playwright.config.ts` starts the dev server), and also runs the database security tests against real Postgres.
 
 | Area | What the specs check |
 |------|----------------|
-| Onboarding | Calorie goal appears; name required; Start tracking opens Today; Protein / Carbs / Fat labels |
+| Onboarding | Calorie goal appears; username suggested from the display name; name required; Start tracking opens Today; Protein / Carbs / Fat labels |
 | Diary | Logging updates the ring; delete clears it; servings stepper; day navigation and Jump to today; clear-day confirm and cancel; empty search; custom food; no cloud errors in local-first mode |
 | Row-level security | Runs `supabase/*.sql` in real Postgres ([PGlite](https://pglite.dev)): signed-out visitors read no private rows; a signed-in user sees only their own diary and cannot write to anyone else's; profile, DM, friend list and shared-food rules |
 | Routing | Landing call to action; custom 404; invite `?u=` opens People |
@@ -51,14 +51,14 @@ Vitest covers nutrition, balance index, macro levels, streak, and badges. Playwr
 | Persistence | Reload keeps the diary; export, wipe, and import restores meals |
 | Macros / balance | Level words; protein line after chicken; meal kcal header |
 | Accessibility smoke | Nav by role; Escape closes the add-food dialog; ring `aria-label` |
-| Edge cases | Short username; invalid friend input; Log food disabled until a food is selected; next day; reset |
+| Edge cases | Username too long, with spaces, or too short; invalid friend input; Log food disabled until a food is selected; next day; reset |
 
 ```bash
 npm test
 npm run test:e2e
 ```
 
-Latest local run: Vitest **12 passed** (5 files). Playwright **51 passed, 2 skipped**. The 2 skipped tests are `e2e/auth-live.spec.ts`, which only run against a real Supabase test project ([how to run them](docs/security.md#running-the-live-tests)).
+Latest local run: Vitest **20 passed** (6 files). Playwright **52 passed, 2 skipped**. The 2 skipped tests are `e2e/auth-live.spec.ts`, which only run against a real Supabase test project ([how to run them](docs/security.md#running-the-live-tests)).
 
 Headed and UI modes: `npm run test:e2e:headed`, `npm run test:e2e:ui`.
 
@@ -93,7 +93,11 @@ npm install
 npm run dev
 ```
 
-`npm install` runs `postinstall`, which downloads Chromium for Playwright (`npx playwright install chromium`).
+Before your first `npm run test:e2e`, download the Playwright browser once:
+
+```bash
+npx playwright install chromium
+```
 
 ```bash
 npm run build

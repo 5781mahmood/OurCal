@@ -34,7 +34,7 @@ ENV/
 .env.*
 !.env.example
 
-# Local AI handoff notes — not for the public repo
+# Local notes
 .private/
 
 # Playwright

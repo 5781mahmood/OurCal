@@ -116,7 +116,7 @@ export function StatsView({ tracker, profile }: StatsViewProps) {
         <div>
           <dt>14-day average</dt>
           <dd>
-            {fourteen.avgCalories || '—'} kcal across {fourteen.loggedDays} logged
+            {fourteen.avgCalories || '-'} kcal across {fourteen.loggedDays} logged
             days
           </dd>
         </div>
