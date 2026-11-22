@@ -1,6 +1,7 @@
 # Dependencies & build
 node_modules/
 dist/
+dev-dist/
 dist-ssr/
 *.local
 

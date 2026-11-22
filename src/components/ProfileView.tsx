@@ -3,6 +3,10 @@ import type { UserProfile } from '../types'
 import { ACTIVITY_LABELS } from '../lib/nutrition'
 import { BADGE_META } from '../lib/badges'
 import { compressImageFile } from '../lib/image'
+import {
+  dismissIosHomeScreenHint,
+  shouldShowIosHomeScreenHint,
+} from '../lib/iosHomeScreen'
 import { Onboarding } from './Onboarding'
 import type { TrackerApi } from '../hooks/useTracker'
 import { updateCloudAvatar } from '../lib/cloud'
@@ -33,6 +37,7 @@ export function ProfileView({ tracker, profile }: ProfileViewProps) {
   const [authNote, setAuthNote] = useState('')
   const [authError, setAuthError] = useState('')
   const [sending, setSending] = useState(false)
+  const [showIosHint, setShowIosHint] = useState(() => shouldShowIosHomeScreenHint())
   const fileRef = useRef<HTMLInputElement>(null)
   const avatarRef = useRef<HTMLInputElement>(null)
 
@@ -271,6 +276,27 @@ export function ProfileView({ tracker, profile }: ProfileViewProps) {
           </form>
         )}
       </section>
+
+      {showIosHint ? (
+        <section className="profile-card a2hs-hint" aria-labelledby="a2hs-heading">
+          <h2 id="a2hs-heading">Add to Home Screen</h2>
+          <p className="lede tight">
+            On iPhone or iPad, open the Share sheet, then tap{' '}
+            <strong>Add to Home Screen</strong>. OurCal opens like an app and keeps
+            working offline from the cached diary.
+          </p>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => {
+              dismissIosHomeScreenHint()
+              setShowIosHint(false)
+            }}
+          >
+            Dismiss
+          </button>
+        </section>
+      ) : null}
 
       <section className="profile-card">
         <h2>Your data</h2>

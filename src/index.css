@@ -893,6 +893,11 @@ select:focus {
   color: var(--warn);
 }
 
+.a2hs-hint {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: color-mix(in srgb, var(--accent) 6%, var(--paper));
+}
+
 .avatar-picker {
   display: grid;
   grid-template-columns: auto 1fr;
