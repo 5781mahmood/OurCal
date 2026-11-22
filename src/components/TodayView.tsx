@@ -263,6 +263,7 @@ export function TodayView({ tracker, profile }: TodayViewProps) {
       <AddFoodModal
         open={modalMeal !== null}
         meal={modalMeal ?? 'Breakfast'}
+        entries={state.entries}
         customFoods={state.customFoods}
         communityFoods={communityFoods}
         shareEnabled={cloudEnabled}

@@ -74,6 +74,39 @@ test.describe('Today diary', () => {
     await expect(snack.getByText('1.25×')).toBeVisible()
   })
 
+  test('Recent list shows last logged foods and restores servings', async ({ page }) => {
+    await logFoodFromSearch(page, 'Breakfast', 'banana', 'Banana')
+
+    const breakfast = page.locator('article.meal-block').filter({ hasText: 'Breakfast' })
+    await breakfast.getByRole('button', { name: 'Add food' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Add to Breakfast' })
+    await dialog.getByLabel('Search foods').fill('oatmeal')
+    await dialog.getByRole('button', { name: 'Oatmeal (cooked), 1 cup, 158 kcal' }).click()
+    // Scope to the dialog: meal rows also use aria-label="Servings".
+    await dialog.getByLabel('Servings', { exact: true }).fill('2')
+    await dialog.getByRole('button', { name: 'Log food' }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+
+    await breakfast.getByRole('button', { name: 'Add food' }).click()
+    const openDialog = page.getByRole('dialog', { name: 'Add to Breakfast' })
+    const recent = openDialog.getByRole('list', { name: 'Recent foods' })
+    await expect(openDialog.getByRole('heading', { name: 'Recent' })).toBeVisible()
+    await expect(recent.getByRole('button', { name: /Oatmeal \(cooked\)/ })).toBeVisible()
+    await expect(recent.getByRole('button', { name: /Banana/ })).toBeVisible()
+
+    await openDialog.getByLabel('Search foods').fill('egg')
+    await expect(openDialog.getByRole('heading', { name: 'Recent' })).toHaveCount(0)
+    await expect(recent).toHaveCount(0)
+
+    await openDialog.getByLabel('Search foods').fill('')
+    await expect(openDialog.getByRole('heading', { name: 'Recent' })).toBeVisible()
+    await openDialog
+      .getByRole('list', { name: 'Recent foods' })
+      .getByRole('button', { name: /Oatmeal \(cooked\)/ })
+      .click()
+    await expect(openDialog.getByLabel('Servings', { exact: true })).toHaveValue('2')
+  })
+
   test('day navigation leaves today and Jump to today returns', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible()
 

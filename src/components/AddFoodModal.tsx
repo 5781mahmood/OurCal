@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import type { FoodItem, MealType } from '../types'
+import type { DiaryEntry, FoodItem, MealType } from '../types'
 import { searchFoods } from '../data/foods'
+import { recentFoodsFromEntries } from '../lib/recentFoods'
 
 interface AddFoodModalProps {
   open: boolean
   meal: MealType
+  entries: DiaryEntry[]
   customFoods: FoodItem[]
   communityFoods: FoodItem[]
   shareEnabled: boolean
@@ -37,6 +39,7 @@ function foodRowLabel(food: FoodItem): string {
 export function AddFoodModal({
   open,
   meal,
+  entries,
   customFoods,
   communityFoods,
   shareEnabled,
@@ -90,6 +93,9 @@ export function AddFoodModal({
     () => searchFoods(query, customFoods, communityFoods),
     [query, customFoods, communityFoods],
   )
+
+  const recent = useMemo(() => recentFoodsFromEntries(entries, 8), [entries])
+  const showRecent = query.trim().length === 0 && recent.length > 0
 
   if (!open) return null
 
@@ -198,7 +204,40 @@ export function AddFoodModal({
               />
             </label>
 
-            <ul className="food-results">
+            {showRecent ? (
+              <div className="food-recent">
+                <h3 className="food-recent-heading">Recent</h3>
+                <ul className="food-results" aria-label="Recent foods">
+                  {recent.map(({ food, servings: lastServings }) => (
+                    <li key={food.id}>
+                      <button
+                        type="button"
+                        className="food-row"
+                        aria-label={`${foodRowLabel(food)}, last time ${lastServings} servings`}
+                        aria-pressed={selected?.id === food.id}
+                        onClick={() => {
+                          setSelected(food)
+                          setServings(String(lastServings))
+                        }}
+                      >
+                        <span>
+                          <strong>{food.name}</strong>
+                          <em>
+                            Last time · {lastServings} serving
+                            {lastServings === 1 ? '' : 's'}
+                          </em>
+                        </span>
+                        <span className="kcal">
+                          {Math.round(food.calories * lastServings)} kcal
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <ul className="food-results" aria-label="Search results">
               {results.length === 0 && query.trim() ? (
                 <li className="meta food-empty">
                   No foods match. Try another name or add a custom food.
