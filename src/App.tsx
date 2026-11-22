@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
+import { Analytics } from '@vercel/analytics/react'
 import { useTracker } from './hooks/useTracker'
 import { Onboarding } from './components/Onboarding'
 import { TodayView } from './components/TodayView'
@@ -176,11 +177,14 @@ function TrackerApp() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/app" element={<TrackerApp />} />
-      <Route path="/404" element={<NotFoundPage />} />
-      <Route path="*" element={<Navigate to="/404" replace />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/app" element={<TrackerApp />} />
+        <Route path="/404" element={<NotFoundPage />} />
+        <Route path="*" element={<Navigate to="/404" replace />} />
+      </Routes>
+      <Analytics />
+    </>
   )
 }

@@ -58,7 +58,7 @@ npm test
 npm run test:e2e
 ```
 
-Latest local run: Vitest **20 passed** (6 files). Playwright **52 passed, 2 skipped**. The 2 skipped tests are `e2e/auth-live.spec.ts`, which only run against a real Supabase test project ([how to run them](docs/security.md#running-the-live-tests)).
+Latest local run: Vitest **20 passed** (6 files). Playwright **53 passed, 2 skipped**. The 2 skipped tests are `e2e/auth-live.spec.ts`, which only run against a real Supabase test project ([how to run them](docs/security.md#running-the-live-tests)).
 
 Headed and UI modes: `npm run test:e2e:headed`, `npm run test:e2e:ui`.
 
@@ -114,6 +114,10 @@ npm run build
    - `VITE_SUPABASE_ANON_KEY`
 
 Without those keys the diary still works on one device and there is no sign-in. Placeholder values `0` and `1` are ignored. With keys, signed-out visitors still use the app locally; signing in from Profile turns on sync. See [docs/security.md](docs/security.md) for what each policy allows.
+
+## Privacy
+
+Page views are counted with [Vercel Web Analytics](https://vercel.com/docs/analytics) (no cookies). Diary data never goes to it.
 
 ## Known limits
 

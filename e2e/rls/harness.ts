@@ -96,6 +96,30 @@ export class RlsDb {
     return (await this.db.query<T>(sql, params)).rows
   }
 
+  /** Authenticated session for a user id that is not in the seeded USERS map. */
+  async asUserId<T = Record<string, unknown>>(
+    userId: string,
+    sql: string,
+    params: unknown[] = [],
+  ): Promise<{ rows: T[]; affectedRows: number }> {
+    let result: { rows: T[]; affectedRows: number } | undefined
+    await this.db
+      .transaction(async (tx: Transaction) => {
+        await tx.exec('set local role authenticated')
+        await tx.query(`select set_config('request.jwt.claims', $1, true)`, [
+          JSON.stringify({ sub: userId, role: 'authenticated' }),
+        ])
+        const res = await tx.query<T>(sql, params)
+        result = { rows: res.rows, affectedRows: res.affectedRows ?? 0 }
+        await tx.rollback()
+      })
+      .catch((err: unknown) => {
+        if (result) return
+        throw err
+      })
+    return result!
+  }
+
   async close() {
     await this.db.close()
   }

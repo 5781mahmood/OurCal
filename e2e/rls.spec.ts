@@ -183,6 +183,20 @@ test.describe('profiles, DMs, friends and shared foods', () => {
     ).rejects.toThrow(/row-level security/)
   })
 
+  test('profiles: username with a space fails the format check', async () => {
+    const daveId = '00000000-0000-4000-8000-00000000000d'
+    await db.admin('insert into auth.users (id, email) values ($1, $2)', [
+      daveId,
+      'dave@example.com',
+    ])
+    await expect(
+      db.asUserId(
+        daveId,
+        "insert into public.profiles (username, display_name) values ('test alpha', 'Dave')",
+      ),
+    ).rejects.toThrow(/profiles_username_format|check constraint/i)
+  })
+
   test('DMs: only members can read a room or its messages, and only post as themselves', async () => {
     for (const member of ['alice', 'carol'] as const) {
       const rooms = await db.as(member, 'select id from public.chat_rooms')

@@ -282,3 +282,7 @@ create policy "foods: share as self" on public.shared_foods
 create policy "foods: contributor deletes" on public.shared_foods
   for delete to authenticated
   using (contributor_id = (select auth.uid()));
+
+-- Usernames: 3-20 lowercase letters, numbers or underscores (matches src/lib/username.ts).
+alter table public.profiles drop constraint if exists profiles_username_format;
+alter table public.profiles add constraint profiles_username_format check (username ~ '^[a-z0-9_]{3,20}$');
