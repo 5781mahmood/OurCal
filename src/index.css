@@ -1236,7 +1236,8 @@ select:focus {
 
 .tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: 0.25rem;
   padding: 0.2rem;
   background: var(--surface);
@@ -1337,6 +1338,27 @@ select:focus {
   color: var(--muted);
   font-size: 0.88rem;
   padding-bottom: 0.65rem;
+}
+
+.barcode-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.barcode-result p {
+  margin: 0;
+}
+
+.barcode-notice {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 10%, var(--paper));
+  font-size: 0.9rem;
 }
 
 /* Stats / profile */

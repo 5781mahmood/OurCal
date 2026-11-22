@@ -37,6 +37,8 @@ export interface FoodItem {
   protein: number
   carbs: number
   fat: number
+  /** EAN/UPC digits, set when a custom food was created from a barcode */
+  barcode?: string
   /** Set when synced from community catalog */
   contributedBy?: string
 }
